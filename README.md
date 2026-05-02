@@ -25,10 +25,10 @@ python close_generalized/train_gen.py --play
 ```bash
 # macOS
 # 1. dependency needed:python3.10-dev
-python -m venv .venv
+python3.10 -m venv .venv
 source ./.venv/bin/activate
-pip install --no-deps -r requirements.txt 
-pip install -r requirements.txt
+pip install --no-deps -r requirements_mac.txt 
+pip install -r requirements_mac.txt
 mjpython close_generalized/train_gen.py --play
 ```
 

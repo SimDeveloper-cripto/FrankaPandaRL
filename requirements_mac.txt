@@ -1,6 +1,6 @@
 # For macOS
 
-torch==2.10.0+cpu
+torch==2.10.0
 numpy==2.2.6
 scipy==1.15.3
 gymnasium==1.2.3
