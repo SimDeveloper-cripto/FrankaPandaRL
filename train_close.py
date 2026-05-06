@@ -162,7 +162,8 @@ class RoboSuiteDoorCloseGymnasiumEnv(gym.Env):
             action = alpha * action + (1.0 - alpha) * self._prev_action
 
         if self._success_latched:
-            action *= 0.2
+            action[:-1] *= 0.2   # arm: small motions only — keep door pressed
+            # gripper (action[-1]) unchanged: maintains full intended closure pressure
 
         if self.cfg.enable_return_stage and self._success_latched and self._return_hold >= self.cfg.return_hold_steps:
             action = np.zeros_like(action)

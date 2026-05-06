@@ -12,7 +12,7 @@ class TrainConfig:
 
     env_name    : str = "Door"
     robot       : str = "Panda"
-    horizon     : int = 400
+    horizon     : int = 600
     control_freq: int = 30
 
     reward_shaping      : bool  = True
@@ -24,7 +24,7 @@ class TrainConfig:
     num_envs    : int  = 8
     vecnormalize: bool = True
 
-    total_steps    : int   = 1_000_000
+    total_steps    : int   = 2_500_000
     learning_rate  : float = 3e-4
     buffer_size    : int   = 1_000_000
     batch_size     : int   = 256
