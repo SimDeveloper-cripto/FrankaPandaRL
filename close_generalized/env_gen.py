@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation as R_scipy
 _GRASP_CONFIRM_STEPS  = 2      # step consecutivi per confermare grasp (era 5: troppo per una policy fresh)
 _GRASP_LOSE_STEPS     = 4      # step fuori lose_tol prima di resettare fase 2
 _GRIPPER_CLOSE_THRESH = 0.65   # abbassato da 0.85: più accessibile, grad più forte verso chiusura
-_GRIPPER_OPEN_THRESH  = -0.6   # forziamo un'apertura molto ampia per evitare collisioni
+_GRIPPER_OPEN_THRESH  = -0.85  # forziamo un'apertura molto ampia per evitare collisioni
 _APPROACH_HEIGHT_TOL  = 0.005  # tolleranza approccio (quasi nulla per evitare agganci)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,10 +69,10 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         dist       = float(np.linalg.norm(handle_pos - eef_pos))
 
         # FSM state as one-hot encoding: [REACH, PUSH, HOLD, RETREAT]
-        # Gives the policy explicit phase awareness — critical for tracking the moving handle
         grasp_phase     = getattr(self, "_grasp_phase", False)
         success_latched = getattr(self, "_success_latched", False)
         ready_retreat   = getattr(self, "_ready_to_retreat", False)
+
         fsm_reach   = 1.0 if (not grasp_phase and not success_latched) else 0.0
         fsm_push    = 1.0 if (grasp_phase and not success_latched) else 0.0
         fsm_hold    = 1.0 if (success_latched and not ready_retreat) else 0.0
@@ -87,11 +87,11 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             hinge_qpos = float(obs.get("hinge_qpos", 0.0))
 
         custom = np.array([
-            dist,                                             # EEF-to-handle distance
+            dist,                                            # EEF-to-handle distance
             getattr(self, "_current_handle_radius", 0.02),   # handle geometry
-            getattr(self, "_current_handle_friction", 0.8),  # handle friction (NEW)
-            fsm_reach, fsm_push, fsm_hold, fsm_retreat,      # FSM one-hot (NEW)
-            hinge_qpos,                                       # door angle (NEW)
+            getattr(self, "_current_handle_friction", 0.8),  # handle friction
+            fsm_reach, fsm_push, fsm_hold, fsm_retreat,      # FSM one-hot
+            hinge_qpos,                                      # door angle
         ], dtype=np.float32)
 
         base_flat = super()._flatten_obs(obs)
@@ -110,8 +110,6 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         dist_xy     = np.linalg.norm(eef_pos[:2] - handle_pos[:2])
         height_diff = eef_pos[2] - handle_pos[2]
 
-        # !!! BUG FIX: was using handle_qpos_addr (=Door_latch_joint, always ~0)
-        # Must use hinge_qpos_addr (=Door_hinge) to read the actual door angle
         door_qpos = self._rs_env.sim.data.qpos[self._rs_env.hinge_qpos_addr]
         is_closed = abs(door_qpos) < 0.03
 
@@ -120,7 +118,6 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
 
         gripper_qpos = obs.get("robot0_gripper_qpos")
         if gripper_qpos is not None:
-            # !!! np.sum(np.abs(qpos)) garantisce che giunti con segni opposti non si annullino
             gripper_width        = np.sum(np.abs(gripper_qpos))
             handle_diameter      = getattr(self, "_current_handle_radius", 0.02) * 2.0
             is_physically_closed = (gripper_width <= handle_diameter + 0.025) and (gripper_width >= 0.015)
@@ -151,6 +148,7 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         # FASE 1 — REACH & GRASP
         # ══════════════════════════════════════════════════════════════════════
         if not self._grasp_phase and not self._success_latched:
+            rew_info["base"] = base_reward - _W_GRIPPER_CLOSE
 
             # Segnale di distanza
             rew_info["dist_3d"]  = -_W_REACH_3D * dist_handle
@@ -177,7 +175,7 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                     rew_info["grip"] = -1.0 * (gripper_action - _GRIPPER_OPEN_THRESH)
                 self._grasp_confirm_count = 0
             else:
-                # Vicino: bonus morbido se chiude
+                # Vicino: bonus morbido se chiude (ripreso originale, niente cliff)
                 if gripper_action > _GRIPPER_OPEN_THRESH:
                     rew_info["grip"] = _W_GRIPPER_CLOSE * ((gripper_action - _GRIPPER_OPEN_THRESH) / (1.0 - _GRIPPER_OPEN_THRESH))
 
@@ -247,9 +245,19 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             rew_info["base"] = base_reward
             rew_info["hold"] = 0.0
 
+            if not getattr(self, "_ready_to_retreat", False):
+                # Bisogna penalizzare severamente se perde la presa fisica corretta SEMPRE
+                if not is_physically_closed:
+                    rew_info["hold_slip"] = -5.0
+                
+                # Bisogna penalizzare severamente se la porta riapre
+                if not is_closed:
+                    rew_info["hold_bounce"] = -20.0 * abs(door_qpos)
+                    self._hold_closed_duration = 0
+
             if is_closed:
                 rew_info["hold"] += 1.0 - abs(door_qpos)
-                if abs(door_qpos) < 0.04:   # wider than is_closed (0.03) → no bounce-resets
+                if abs(door_qpos) < 0.04:
                     control_freq = self.cfg.control_freq
                     target_hold_steps = int(control_freq * 2.0)
 
@@ -265,21 +273,21 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                         else:
                             rew_info["hold_grip"] = -2.0 * abs(gripper_action - _GRIPPER_CLOSE_THRESH)
 
+                        if gripper_action < 0.0:
+                            rew_info["hold_drop_pen"] = -10.0 * abs(gripper_action)
+
                         if action is not None:
                             action_norm = np.linalg.norm(action[:-1])
                             if action_norm < 0.05:
                                 rew_info["hold_act"] = 1.0
                             else:
-                                rew_info["hold_act"] = -2.0 * action_norm
+                                rew_info["hold_act"] = -5.0 * action_norm
 
                         rew_info["hold_flat"] = -5.0 * flat_alignment
                     else:
-                        # Safety failsafe: if hold timer exceeds 2× target, force RETREAT
-                        # (prevents infinite loops if physics misbehave)
-                        if self._hold_closed_duration >= 2 * target_hold_steps:
+                        if not getattr(self, "_ready_to_retreat", False):
                             self._ready_to_retreat = True
-                        else:
-                            self._ready_to_retreat = True
+                            self._retreat_pos = eef_pos + np.array([-0.20, 0.0, 0.05], dtype=np.float32)
 
                         if gripper_action < _GRIPPER_OPEN_THRESH:
                             rew_info["ret_grip"] = 2.0
@@ -289,9 +297,24 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                         if action is not None:
                             rew_info["ret_act"] = -1.0 * np.linalg.norm(action[:-1])
 
+                            # REGOLARIZZAZIONE ROTAZIONALE: nessuna torsione del polso
+                            rew_info["ret_rot"] = -10.0 * np.linalg.norm(action[3:6])
+
+                            if gripper_action > -0.8:
+                                rew_info["ret_early_move"] = -10.0 * np.linalg.norm(action[:-1])
+
+                            if dist_handle < 0.12:
+                                rew_info["ret_lat"] = -5.0 * abs(action[1])
+                                if action[2] < 0:
+                                    rew_info["ret_down"] = -5.0 * abs(action[2])
+
+                            # BLOCCO TOTALE A FINE RETREAT  # TODO: QUESTO BLOCCO E' SOLO DEL POLSO? OPPURE DI TUTTI I GIUNTI?
+                            if hasattr(self, "_retreat_pos"):
+                                dist_to_target = float(np.linalg.norm(eef_pos - self._retreat_pos))
+                                if dist_to_target < 0.05:
+                                    rew_info["ret_freeze"] = -20.0 * np.linalg.norm(action[:-1])
+
                         # Reward for latch joint returning to rest (0.0 rad)
-                        # The spring physics drive it there; this reward reinforces
-                        # that the gripper must OPEN to allow the latch to return
                         latch_qpos = self._rs_env.sim.data.qpos[self._rs_env.handle_qpos_addr]
                         rew_info["latch_ret"] = -1.0 * abs(latch_qpos)
             else:
@@ -354,6 +377,7 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             f_scale = np.random.uniform(0.3, 1.2)
             base_f  = getattr(self, "base_friction", np.array([0.8]))[0]
             new_f   = float(np.clip(base_f * f_scale, 0.05, 2.0))
+
             self._rs_env.sim.model.geom_friction[self.handle_geom_id][0] = new_f
             self._current_handle_friction = new_f
         else:
@@ -384,8 +408,5 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             self._rs_env.sim.model.body_quat[self.door_body_id] = np.array([
                 res_q[3], res_q[0], res_q[1], res_q[2]
             ])
-
-        # NOTE: old friction-capping block removed — superseded by bidirectional
-        # friction randomization above (which already clips to [0.05, 2.0])
 
         return super().reset(seed=seed, options=options)
