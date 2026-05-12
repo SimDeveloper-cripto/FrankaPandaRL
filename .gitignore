@@ -5,6 +5,5 @@ venv/
 __pycache__/
 .DS_Store
 papers/
-close_gen_docv2_copy_model/
-close_gen_docv3_copy_model/
 close_gen_docv3_copy_model_2/
+close_gen_docv3_copy_model_def/

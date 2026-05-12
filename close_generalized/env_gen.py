@@ -5,10 +5,14 @@ import numpy as np
 from train_close import RoboSuiteDoorCloseGymnasiumEnv
 from scipy.spatial.transform import Rotation as R_scipy
 
+import logging
+from robosuite.utils.log_utils import ROBOSUITE_DEFAULT_LOGGER
+ROBOSUITE_DEFAULT_LOGGER.setLevel(logging.ERROR)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Parametri FSM
 # ─────────────────────────────────────────────────────────────────────────────
-_GRASP_CONFIRM_STEPS  = 2      # step consecutivi per confermare grasp (era 5: troppo per una policy fresh)
+_GRASP_CONFIRM_STEPS  = 5      # step consecutivi per confermare grasp
 _GRASP_LOSE_STEPS     = 4      # step fuori lose_tol prima di resettare fase 2
 _GRIPPER_CLOSE_THRESH = 0.65   # abbassato da 0.85: più accessibile, grad più forte verso chiusura
 _GRIPPER_OPEN_THRESH  = -0.85  # forziamo un'apertura molto ampia per evitare collisioni
@@ -144,6 +148,13 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         reward   = 0.0
         rew_info = {}
 
+        if action is not None:
+            if not hasattr(self, "_prev_eef_action"):
+                self._prev_eef_action = action[:-1].copy()
+            jerk = np.linalg.norm(action[:-1] - self._prev_eef_action)
+            rew_info["smoothness"] = -1.0 * jerk
+            self._prev_eef_action = action[:-1].copy()
+
         # ══════════════════════════════════════════════════════════════════════
         # FASE 1 — REACH & GRASP
         # ══════════════════════════════════════════════════════════════════════
@@ -179,12 +190,12 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                 if gripper_action > _GRIPPER_OPEN_THRESH:
                     rew_info["grip"] = _W_GRIPPER_CLOSE * ((gripper_action - _GRIPPER_OPEN_THRESH) / (1.0 - _GRIPPER_OPEN_THRESH))
 
-                if gripper_action > _GRIPPER_CLOSE_THRESH and is_physically_closed and dist_handle < 0.025:
+                if gripper_action > _GRIPPER_CLOSE_THRESH and is_physically_closed and dist_handle < 0.020:
                     self._grasp_confirm_count += 1
                 else:
                     self._grasp_confirm_count = 0
 
-                if self._grasp_confirm_count >= _GRASP_CONFIRM_STEPS:
+                if self._grasp_confirm_count >= 5:
                     self._grasp_phase      = True
                     self._grasp_lose_count = 0
                     if not getattr(self, "_has_received_grasp_bonus", False):
@@ -223,8 +234,12 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             if gripper_lost or distance_lost:
                 if distance_lost:
                     rew_info["dist_lost"] = -_W_GRASP_LOST * (dist_handle - effective_lose_tol)
+                    if not hasattr(self, "_fsm_events"): self._fsm_events = []
+                    self._fsm_events.append(f"DROP: dist ({dist_handle:.3f}) > {effective_lose_tol:.3f}")
                 if gripper_lost:
                     rew_info["grip_lost"] = -5.0 * abs(min(0.0, gripper_action) - _GRIPPER_CLOSE_THRESH)
+                    if not hasattr(self, "_fsm_events"): self._fsm_events = []
+                    self._fsm_events.append("DROP: Grip opened / not phys closed")
                 self._grasp_phase         = False
                 self._grasp_confirm_count = 0
                 self._grasp_lose_count    = 0
@@ -276,6 +291,11 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                         if gripper_action < 0.0:
                             rew_info["hold_drop_pen"] = -10.0 * abs(gripper_action)
 
+                        # Blocco totale di tutti i giunti del robot (non solo polso) in Fase 3
+                        joint_vel = obs.get("robot0_joint_vel")
+                        if joint_vel is not None:
+                            rew_info["hold_jnt_freeze"] = -3.0 * np.linalg.norm(joint_vel)
+
                         if action is not None:
                             action_norm = np.linalg.norm(action[:-1])
                             if action_norm < 0.05:
@@ -308,11 +328,16 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                                 if action[2] < 0:
                                     rew_info["ret_down"] = -5.0 * abs(action[2])
 
-                            # BLOCCO TOTALE A FINE RETREAT  # TODO: QUESTO BLOCCO E' SOLO DEL POLSO? OPPURE DI TUTTI I GIUNTI?
+                            # BLOCCO TOTALE A FINE RETREAT E DI TUTTI I GIUNTI
                             if hasattr(self, "_retreat_pos"):
                                 dist_to_target = float(np.linalg.norm(eef_pos - self._retreat_pos))
                                 if dist_to_target < 0.05:
                                     rew_info["ret_freeze"] = -20.0 * np.linalg.norm(action[:-1])
+                                    
+                                    # Blocco totale di tutti i giunti del robot a fine ritirata
+                                    joint_vel = obs.get("robot0_joint_vel")
+                                    if joint_vel is not None:
+                                        rew_info["ret_jnt_freeze"] = -5.0 * np.linalg.norm(joint_vel)
 
                         # Reward for latch joint returning to rest (0.0 rad)
                         latch_qpos = self._rs_env.sim.data.qpos[self._rs_env.handle_qpos_addr]
@@ -345,7 +370,12 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             print(f"└─────────┴────────┴────────┴───────┴───────────┴───────┴───────┴───────┴───────┘")
 
             rew_str = " │ ".join([f"{k}: {v:>+5.2f}" for k, v in rew_info.items() if abs(v) > 0.001])
-            print(f"  ↳ REWARDS │ {rew_str} │ TOT: {reward:>+6.2f}\n")
+            print(f"  ↳ REWARDS │ {rew_str} │ TOT: {reward:>+6.2f}")
+            if getattr(self, "_fsm_events", []):
+                events = " | ".join(list(set(self._fsm_events)))
+                print(f"  ↳ FSM LOG │ {events}")
+                self._fsm_events = []
+            print()
 
         return reward, terminated, truncated
 
@@ -360,6 +390,7 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         self._prev_door_angle          = None
         self._min_door_angle           = None
         self._has_received_grasp_bonus = False
+        self._fsm_events               = []
 
         if getattr(self, "handle_geom_id", None) is not None:
             base_radius = 0.02
