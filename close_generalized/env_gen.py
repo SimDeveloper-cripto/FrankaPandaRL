@@ -30,7 +30,7 @@ _W_GRIPPER_OPEN   = 1.5   # reward per aprire il gripper durante approach
 _W_GRIPPER_CLOSE  = 2.5   # aumentato da 1.0: gradiente più ripido verso chiusura completa
 _W_PUSH_PENALTY   = 5.0   # penalità pressing dall'alto (eef alto + grip chiuso)
 _W_APPROACH_BELOW = 3.0   # penalità approccio dal basso
-_W_GRASP_BONUS    = 20.0  # bonus one-shot maggiorato per incentivare transizione a fase 2
+_W_GRASP_BONUS    = 50.0  # bonus one-shot per incentivare la transizione a Phase 3 (latch)
 ### Fase 2
 _W_GRASP_LOST     = 6.0     # penalità per grasp perso
 _W_PROGRESS_GRASP = 2000.0  # [CARROT] premio immenso per spingere la porta, senza usare bastoni (penalità)
@@ -224,12 +224,37 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             if action is not None:
                 rew_info["act_pen"] = -_W_ACTION_PHASE2 * np.linalg.norm(action[:-1])
 
-            door_moving         = (prev_angle is not None and prev_angle - door_angle > 0.001)
-            effective_lose_tol  = 0.05 if door_moving else 0.04
+
+            # Tolleranza dinamica: minimo 0.05 (matching comportamento precedente 100% success)
+            # Si espande fino a 0.12 quando la porta gira veloce (maniglia si sposta 2-3cm/step)
+            if prev_angle is not None:
+                door_speed = abs(prev_angle - door_angle) * self.cfg.control_freq  # rad/s
+                effective_lose_tol = float(np.clip(0.05 + door_speed * 0.5, 0.05, 0.12))
+            else:
+                effective_lose_tol = 0.05
+
+            # Near-latch zone (door_angle < 0.05 rad = ultimi ~3 gradi prima del latch):
+            # 1) La maniglia si è spostata significativamente lungo l'arco → is_physically_closed
+            #    diventa inaffidabile (gripper_width esce dalla finestra per motion physics).
+            #    Bypassa il check e usa solo gripper_action.
+            # 2) Usa tolleranza distanza più larga (0.10) per non droppare mentre il braccio
+            #    segue l'arco finale.
+            # 3) Bonus denso +3.0/step: rende il latch finale molto più attraente dell'exploit
+            #    "fermarsi a 0.06 rad".
+            near_latch = door_angle < 0.05
+            if near_latch:
+                effective_lose_tol = 0.10  # latch zone: molto più permissiva
+                rew_info["near_latch_bonus"] = 3.0 * (0.05 - door_angle) / 0.05  # 0→+3.0
+
 
             gripper_action_lost = gripper_action < _GRIPPER_CLOSE_THRESH
-            gripper_lost        = gripper_action_lost or not is_physically_closed
-            distance_lost       = dist_handle > effective_lose_tol
+            if near_latch:
+                # Vicino al latch: is_physically_closed è inaffidabile (maniglia in moto)
+                # — controlla solo che l'agente VOGLIA tenere il grip (azione > threshold)
+                gripper_lost  = gripper_action_lost
+            else:
+                gripper_lost  = gripper_action_lost or not is_physically_closed
+            distance_lost = dist_handle > effective_lose_tol
 
             if gripper_lost or distance_lost:
                 if distance_lost:
@@ -243,6 +268,8 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                 self._grasp_phase         = False
                 self._grasp_confirm_count = 0
                 self._grasp_lose_count    = 0
+                if hasattr(self, "_prev_eef_pos_push"):
+                    del self._prev_eef_pos_push
             else:
                 self._grasp_lose_count = 0
                 if gripper_action < 1.0:
@@ -261,14 +288,22 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             rew_info["hold"] = 0.0
 
             if not getattr(self, "_ready_to_retreat", False):
-                # Bisogna penalizzare severamente se perde la presa fisica corretta SEMPRE
+                # Penalizza se perde la presa fisica
                 if not is_physically_closed:
                     rew_info["hold_slip"] = -5.0
-                
-                # Bisogna penalizzare severamente se la porta riapre
+
+                # Penalità sulla velocità angolare della porta (segnale del rimbalzo)
+                # Più che penalizzare solo la posizione, obbliga a contrastare il moto
+                door_qvel = float(self._rs_env.sim.data.qvel[self._door_hinge_dof_adr])
+                if abs(door_qvel) > 0.01:
+                    rew_info["hold_veldamp"] = -15.0 * abs(door_qvel)
+
+                # Soft timer reset: bounce proporzionale all'entità, non azzeramento secco
                 if not is_closed:
                     rew_info["hold_bounce"] = -20.0 * abs(door_qpos)
-                    self._hold_closed_duration = 0
+                    # Decremento proporzionale: bounce piccolo → pochi step persi
+                    penalty_steps = int(abs(door_qpos) / 0.03 * 10)
+                    self._hold_closed_duration = max(0, self._hold_closed_duration - penalty_steps)
 
             if is_closed:
                 rew_info["hold"] += 1.0 - abs(door_qpos)
@@ -291,7 +326,6 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                         if gripper_action < 0.0:
                             rew_info["hold_drop_pen"] = -10.0 * abs(gripper_action)
 
-                        # Blocco totale di tutti i giunti del robot (non solo polso) in Fase 3
                         joint_vel = obs.get("robot0_joint_vel")
                         if joint_vel is not None:
                             rew_info["hold_jnt_freeze"] = -3.0 * np.linalg.norm(joint_vel)
@@ -303,11 +337,23 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                             else:
                                 rew_info["hold_act"] = -5.0 * action_norm
 
-                        rew_info["hold_flat"] = -5.0 * flat_alignment
+                        # Fix A: peso ridotto da -5.0 a -2.0.
+                        # Con flat_alignment≈0.50, il vecchio -5.0 costava -2.5/step →
+                        # Phase 3 era totalmente negativa (-4/step), incentivando uscite frettolose.
+                        rew_info["hold_flat"] = -2.0 * flat_alignment
+
+                        # Fix B: penalità distanza durante HOLD (previene "momentum latch").
+                        # Se il robot è a >6cm dalla maniglia mentre la porta è chiusa,
+                        # significa che il latch è scattato per inerzia senza contatto fisico.
+                        # Spinge il robot a mantenere la prossimità durante tutto il HOLD.
+                        if dist_handle > 0.06:
+                            rew_info["hold_dist"] = -3.0 * (dist_handle - 0.06)
                     else:
+                        # ── Transizione a RETREAT ──────────────────────────────────────────────
                         if not getattr(self, "_ready_to_retreat", False):
                             self._ready_to_retreat = True
-                            self._retreat_pos = eef_pos + np.array([-0.20, 0.0, 0.05], dtype=np.float32)
+                            # Distanza ridotta 20cm → 13cm per completare nel budget
+                            self._retreat_pos = eef_pos + np.array([-0.13, 0.0, 0.04], dtype=np.float32)
 
                         if gripper_action < _GRIPPER_OPEN_THRESH:
                             rew_info["ret_grip"] = 2.0
@@ -315,8 +361,6 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                             rew_info["ret_grip"] = -1.0 * abs(gripper_action + 1.0)
 
                         if action is not None:
-                            rew_info["ret_act"] = -1.0 * np.linalg.norm(action[:-1])
-
                             # REGOLARIZZAZIONE ROTAZIONALE: nessuna torsione del polso
                             rew_info["ret_rot"] = -10.0 * np.linalg.norm(action[3:6])
 
@@ -328,23 +372,39 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                                 if action[2] < 0:
                                     rew_info["ret_down"] = -5.0 * abs(action[2])
 
-                            # BLOCCO TOTALE A FINE RETREAT E DI TUTTI I GIUNTI
+                            # Reward direzionale: sostituisce ret_act generico
+                            # Premia movimento VERSO il target, penalizza solo le componenti perpendicolari
                             if hasattr(self, "_retreat_pos"):
                                 dist_to_target = float(np.linalg.norm(eef_pos - self._retreat_pos))
-                                if dist_to_target < 0.05:
+
+                                if dist_to_target > 0.02:
+                                    dir_to_target = (self._retreat_pos - eef_pos)
+                                    dir_norm = dir_to_target / (dist_to_target + 1e-6)
+                                    action_alignment = float(np.dot(action[:3], dir_norm))
+                                    # Premio se si muove verso il target
+                                    rew_info["ret_dir"] = 3.0 * action_alignment
+                                    # Penalizza solo le componenti perpendicolari (non quelle verso target)
+                                    perp = action[:3] - action_alignment * dir_norm
+                                    rew_info["ret_perp"] = -2.0 * float(np.linalg.norm(perp))
+                                else:
+                                    # Vicino al target: freeze totale
                                     rew_info["ret_freeze"] = -20.0 * np.linalg.norm(action[:-1])
-                                    
-                                    # Blocco totale di tutti i giunti del robot a fine ritirata
-                                    joint_vel = obs.get("robot0_joint_vel")
-                                    if joint_vel is not None:
-                                        rew_info["ret_jnt_freeze"] = -5.0 * np.linalg.norm(joint_vel)
+
+                                # Joint freeze progressivo su TUTTO il retreat (non solo <5cm)
+                                # Peso crescente man mano che ci si avvicina al target
+                                joint_vel = obs.get("robot0_joint_vel")
+                                if joint_vel is not None:
+                                    freeze_weight = float(np.clip(
+                                        1.0 - dist_to_target / 0.15, 0.1, 1.0
+                                    ))
+                                    rew_info["ret_jnt_prog"] = -5.0 * freeze_weight * np.linalg.norm(joint_vel)
 
                         # Reward for latch joint returning to rest (0.0 rad)
                         latch_qpos = self._rs_env.sim.data.qpos[self._rs_env.handle_qpos_addr]
                         rew_info["latch_ret"] = -1.0 * abs(latch_qpos)
             else:
                 if not getattr(self, "_ready_to_retreat", False):
-                    self._hold_closed_duration = 0
+                    self._hold_closed_duration = max(0, self._hold_closed_duration - 1)
 
         # Calcolo Totale
         for v in rew_info.values():
@@ -391,6 +451,9 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         self._min_door_angle           = None
         self._has_received_grasp_bonus = False
         self._fsm_events               = []
+
+        if hasattr(self, "_prev_eef_pos_push"):
+            del self._prev_eef_pos_push
 
         if getattr(self, "handle_geom_id", None) is not None:
             base_radius = 0.02

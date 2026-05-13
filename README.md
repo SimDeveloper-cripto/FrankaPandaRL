@@ -34,7 +34,7 @@ mjpython close_generalized/train_gen.py --play
 
 ## Results
 
-Coming soon with v2 !!
+Coming soon !!
 
 ## 📄 License
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

@@ -116,7 +116,7 @@ def main():
     parser.add_argument("--model", type=str, default="runs/close_gen/best_model.zip")
     args = parser.parse_args()
 
-    my_cfg = TrainConfig(run_dir="runs/close_gen", num_envs=8, horizon=400)
+    my_cfg = TrainConfig(run_dir="runs/close_gen", num_envs=8, horizon=500)
     if args.play:
         env = DummyVecEnv([lambda: GeneralizedDoorEnv(my_cfg, render_mode="human")])
         env.env_method("set_curriculum_level", 1.0)
