@@ -118,45 +118,122 @@ def main():
 
     my_cfg = TrainConfig(run_dir="runs/close_gen", num_envs=8, horizon=500)
     if args.play:
-        env = DummyVecEnv([lambda: GeneralizedDoorEnv(my_cfg, render_mode="human")])
-        env.env_method("set_curriculum_level", 1.0)
-
+        raw_env = GeneralizedDoorEnv(my_cfg, render_mode="human")
         vn_path = os.path.join(os.path.dirname(args.model), "vecnormalize.pkl")
+
         if os.path.exists(vn_path):
-            env             = VecNormalize.load(vn_path, env)
-            env.training    = False
-            env.norm_reward = False
+            import pickle
+            with open(vn_path, "rb") as f:
+                vn_data = pickle.load(f)
+            obs_rms = vn_data.obs_rms
+        else:
+            obs_rms = None
 
-        model = SAC.load(args.model, env=env)
-        obs   = env.reset()
+        raw_env.set_curriculum_level(1.0)
+        model = SAC.load(args.model)
 
-        prev_action = np.zeros(env.action_space.shape)
+        def setup_interactive_viewer(env):
+            try:
+                env._rs_env.viewer.set_camera(camera_id = -1)
+                env._rs_env.viewer.user_camera_action = True 
+                env._rs_env.viewer.vopt.flags[:]      = 1  
+                if hasattr(env._rs_env.viewer, "ui"):
+                    env._rs_env.viewer.ui.enable  = True
+                env._rs_env.viewer.custom_profile = True
+            except Exception:
+                pass
+
+        obs, _ = raw_env.reset()
+        setup_interactive_viewer(raw_env)
+
+        prev_action = np.zeros(raw_env.action_space.shape)
         alpha       = 0.5
         target_dt   = 1.0 / my_cfg.control_freq
 
-        print("[INFO] Playing in Real-Time...")
+        print("[INFO] Playing...")
+        
+        current_reward = 0.0
+        step_counter   = 0
         while True:
-            start_t     = time.perf_counter()
-            action, _   = model.predict(obs, deterministic=True)
+            start_t = time.perf_counter()
+
+            if obs_rms is not None:
+                obs_norm  = (obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8)
+                obs_norm  = np.clip(obs_norm, -10.0, 10.0)
+                action, _ = model.predict(obs_norm, deterministic = True)
+            else:
+                action, _ = model.predict(obs, deterministic = True)
+
             action      = alpha * action + (1.0 - alpha) * prev_action
             prev_action = action.copy()
-            step_result = env.step(action)
 
-            if len(step_result) == 5:
-                obs, _, terminated, truncated, _ = step_result
-                done = np.logical_or(terminated, truncated)
-            else:
-                obs, _, done, _ = step_result
+            obs, current_reward, terminated, truncated, info = raw_env.step(action)
+            done                                             = terminated or truncated
+            step_counter += 1
 
-            env.render()
+            # ─────────────────────────────────────────────────────────────────
+            try:
+                viewer = raw_env._rs_env.viewer
 
+                if raw_env._success_latched:
+                    if getattr(raw_env, "_ready_to_retreat", False):
+                        colore_fase = [0.0, 0.0, 1.0, 1.0]
+                    else:
+                        colore_fase = [0.0, 1.0, 0.0, 1.0]
+                elif raw_env._grasp_phase:
+                    colore_fase = [1.0, 1.0, 0.0, 1.0]
+                else:
+                    colore_fase = [1.0, 0.0, 0.0, 1.0]
+
+                gripper_action = action[-1]
+                colore_grip    = [0.0, 1.0, 1.0, 1.0] if gripper_action > 0.65 else [0.4, 0.4, 0.4, 1.0]
+
+                altezza_barra = float(np.clip((current_reward + 10) / 20.0, 0.01, 0.3))
+                colore_reward = [1.0 - (altezza_barra*3), altezza_barra*3, 0.0, 1.0]
+
+                if hasattr(viewer, "_markers"):
+                    viewer._markers.clear()
+
+                if hasattr(viewer, "_markers"):
+                    viewer._markers.clear() 
+                
+                viewer.add_marker(
+                    pos  = [0.2, 0.0, 1.1],
+                    size = [0.06, 0.06, 0.06],
+                    rgba = colore_fase,
+                    type = 2
+                )
+                viewer.add_marker(
+                    pos  = [0.2, -0.15, 1.1],
+                    size = [0.04, 0.04, 0.04],
+                    rgba = colore_grip,
+                    type = 3
+                )
+                viewer.add_marker(
+                    pos  = [0.2, 0.15, 1.0 + (altezza_barra / 2.0)],
+                    size = [0.02, 0.02, altezza_barra],
+                    rgba = colore_reward,
+                    type = 1
+                )
+
+                if hasattr(viewer, "update"):
+                    viewer.update()
+
+            except Exception as e:
+                pass
+            # ─────────────────────────────────────────────────────────────────
+
+            raw_env.render()
             elapsed = time.perf_counter() - start_t
             if elapsed < target_dt:
                 time.sleep(target_dt - elapsed)
 
-            if np.any(done):
-                obs = env.reset()
+            if done:
+                obs, _ = raw_env.reset()
+                setup_interactive_viewer(raw_env)
+
                 prev_action[:] = 0
+                step_counter   = 0
     else:  # Train
         os.makedirs(my_cfg.run_dir, exist_ok=True)
 

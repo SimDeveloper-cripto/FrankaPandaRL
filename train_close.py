@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore")
 logging.getLogger("robosuite").setLevel(logging.ERROR)
 logging.getLogger("numba").setLevel(logging.ERROR)
 
-os.environ["KMP_WARNINGS"] = "off"
+os.environ["KMP_WARNINGS"]         = "off"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import gymnasium as gym
@@ -75,6 +75,12 @@ class RoboSuiteDoorCloseGymnasiumEnv(gym.Env):
             horizon                = cfg.horizon,
             control_freq           = cfg.control_freq,
         )
+
+        if render_mode == "human":
+            try:
+                self._rs_env.viewer.set_camera(camera_id=-1)
+            except Exception as e:
+                print(f"[CAMERA ERROR] {e}")
 
         self._door_hinge_name     = "Door_hinge"
         self._door_hinge_qpos_adr = None
@@ -248,6 +254,10 @@ class RoboSuiteDoorCloseGymnasiumEnv(gym.Env):
 
     def render(self):
         if self.render_mode == "human":
+            try: 
+                self._rs_env.viewer.set_camera(camera_id=-1)
+            except Exception as e:
+                pass
             return self._rs_env.render()
         return None
 
