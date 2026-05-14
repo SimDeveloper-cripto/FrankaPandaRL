@@ -244,8 +244,6 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             near_latch = door_angle < 0.05
             if near_latch:
                 effective_lose_tol = 0.10  # latch zone: molto più permissiva
-                rew_info["near_latch_bonus"] = 3.0 * (0.05 - door_angle) / 0.05  # 0→+3.0
-
 
             gripper_action_lost = gripper_action < _GRIPPER_CLOSE_THRESH
             if near_latch:
@@ -274,8 +272,6 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                 self._grasp_lose_count = 0
                 if gripper_action < 1.0:
                     rew_info["grip"] = -5.0 * (1.0 - gripper_action)
-                if gripper_action > _GRIPPER_CLOSE_THRESH:
-                    rew_info["grip_hold"] = 2.0
 
             if action is not None and action[2] > 0.05:
                 rew_info["lift_pen"] = -2.0 * action[2]
@@ -287,16 +283,18 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             rew_info["base"] = base_reward
             rew_info["hold"] = 0.0
 
+            is_waiting_latch = getattr(self, "_hold_closed_duration", 0) >= int(self.cfg.control_freq * 2.0)
+
             if not getattr(self, "_ready_to_retreat", False):
-                # Penalizza se perde la presa fisica
-                if not is_physically_closed:
+                # Penalizza se perde la presa fisica (disabilitato se stiamo aspettando il latch)
+                if not is_physically_closed and not is_waiting_latch:
                     rew_info["hold_slip"] = -5.0
 
                 # Penalità sulla velocità angolare della porta (segnale del rimbalzo)
                 # Più che penalizzare solo la posizione, obbliga a contrastare il moto
                 door_qvel = float(self._rs_env.sim.data.qvel[self._door_hinge_dof_adr])
                 if abs(door_qvel) > 0.01:
-                    rew_info["hold_veldamp"] = -15.0 * abs(door_qvel)
+                    rew_info["hold_veldamp"] = -25.0 * abs(door_qvel)
 
                 # Soft timer reset: bounce proporzionale all'entità, non azzeramento secco
                 if not is_closed:
@@ -314,28 +312,45 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                     if not hasattr(self, "_hold_closed_duration"):
                         self._hold_closed_duration = 0
 
-                    if self._hold_closed_duration < target_hold_steps:
-                        self._hold_closed_duration += 1
-                        self._ready_to_retreat     = False
+                    latch_qpos = self._rs_env.sim.data.qpos[self._rs_env.handle_qpos_addr]
+                    latch_is_neutral = abs(latch_qpos) < 0.15
 
-                        if gripper_action > _GRIPPER_CLOSE_THRESH:
-                            rew_info["hold_grip"] = 1.0
+                    if self._hold_closed_duration < target_hold_steps or not latch_is_neutral:
+                        is_waiting = (self._hold_closed_duration >= target_hold_steps)
+                        
+                        if is_waiting and not latch_is_neutral:
+                            rew_info["latch_wait"] = -10.0 * abs(latch_qpos)  # Pressione alzata per vincere il deadlock
                         else:
-                            rew_info["hold_grip"] = -2.0 * abs(gripper_action - _GRIPPER_CLOSE_THRESH)
+                            self._hold_closed_duration += 1
+                            
+                        self._ready_to_retreat = False
 
-                        if gripper_action < 0.0:
-                            rew_info["hold_drop_pen"] = -10.0 * abs(gripper_action)
+                        if is_waiting:
+                            # Siamo in attesa: invitiamo il robot ad APRIRE la presa per liberare il latch
+                            if gripper_action < _GRIPPER_OPEN_THRESH:
+                                rew_info["wait_grip"] = 2.0
+                            else:
+                                rew_info["wait_grip"] = -2.0 * abs(gripper_action + 1.0)
+                        else:
+                            # Normale pressione per stabilizzare la porta
+                            if gripper_action > _GRIPPER_CLOSE_THRESH:
+                                rew_info["hold_grip"] = 1.0
+                            else:
+                                rew_info["hold_grip"] = -2.0 * abs(gripper_action - _GRIPPER_CLOSE_THRESH)
+
+                            if gripper_action < 0.0:
+                                rew_info["hold_drop_pen"] = -10.0 * abs(gripper_action)
 
                         joint_vel = obs.get("robot0_joint_vel")
                         if joint_vel is not None:
-                            rew_info["hold_jnt_freeze"] = -3.0 * np.linalg.norm(joint_vel)
+                            rew_info["hold_jnt_freeze"] = -1.0 * np.linalg.norm(joint_vel)
 
                         if action is not None:
                             action_norm = np.linalg.norm(action[:-1])
                             if action_norm < 0.05:
                                 rew_info["hold_act"] = 1.0
                             else:
-                                rew_info["hold_act"] = -5.0 * action_norm
+                                rew_info["hold_act"] = -2.0 * action_norm
 
                         # Fix A: peso ridotto da -5.0 a -2.0.
                         # Con flat_alignment≈0.50, il vecchio -5.0 costava -2.5/step →
@@ -361,11 +376,8 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                             rew_info["ret_grip"] = -1.0 * abs(gripper_action + 1.0)
 
                         if action is not None:
-                            # REGOLARIZZAZIONE ROTAZIONALE: nessuna torsione del polso
-                            rew_info["ret_rot"] = -10.0 * np.linalg.norm(action[3:6])
-
-                            if gripper_action > -0.8:
-                                rew_info["ret_early_move"] = -10.0 * np.linalg.norm(action[:-1])
+                            # REGOLARIZZAZIONE ROTAZIONALE: torsione ridotta
+                            rew_info["ret_rot"] = -3.0 * np.linalg.norm(action[3:6])
 
                             if dist_handle < 0.12:
                                 rew_info["ret_lat"] = -5.0 * abs(action[1])
