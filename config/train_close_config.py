@@ -41,14 +41,6 @@ class TrainConfig:
     n_eval_episodes: int = 10
     checkpoint_freq: int = 200_000
 
-    # Rischio Collisione (Punto di fine corsa): Nel simulatore, la porta sbatte contro lo stipite
-    # (il muro) a 0.0 radianti. Impostando close_fraction = 0.015, il traguardo viene piazzato a 0.023 radianti.
-    # Questo significa che l'agente smetterà di spingere poco prima (circa 1.3 gradi) di schiantare fisicamente la porta contro lo stipite.
-    # C'è spazio a sufficienza per non incastrare il polso e non causare instabilità nel motore fisico.
-
-    # Rischio sulla Fase 3 (Hold) e 4 (Ritiro): La Fase 3 richiede che la porta sia tenuta sotto 0.03 radianti per non prendere penalità
-    # (is_closed). Con il vecchio valore a 0.12, l'agente entrava in Fase 3, prendeva una pioggia di penalità e impazziva.
-    # Con questo fix, entrerà in Fase 3 a 0.023, che è già sotto il limite di 0.03!
     close_fraction: float = 0.015  # 0.08
 
     init_open_min_fraction: float = 0.70
