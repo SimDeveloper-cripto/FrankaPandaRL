@@ -128,8 +128,8 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
                         # Fast retreat: no scaling (scale = 1.0)
                         pass
             else:
-                # HOLD phase
-                action[:-1] *= 0.1  # Scale arm actions to keep it steady and avoid door bounce
+                # HOLD phase: Freeze the arm completely to eliminate any oscillations
+                action[:-1] = 0.0
 
         obs, _, rs_done, info = self._rs_env.step(action)
         self._step_count += 1
@@ -140,8 +140,10 @@ class GeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
 
         just_succeeded = False
         if door_angle <= self._success_angle and not self._success_latched:
-            self._success_latched = True
-            just_succeeded        = True
+            # Require the gripper to be firmly closed to transition to HOLD
+            if action[-1] > 0.80:
+                self._success_latched = True
+                just_succeeded        = True
 
         is_success                    = self._success_latched
         reward, terminated, truncated = self._calculate_reward(action, obs, rs_done, door_angle, prev_angle, just_succeeded)

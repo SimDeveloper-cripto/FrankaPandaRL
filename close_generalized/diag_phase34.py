@@ -135,12 +135,12 @@ def test_hinge_damping():
     import robosuite as suite
     env_rs = suite.make(
         'Door',
-        robots='Panda',
-        has_renderer=False,
-        has_offscreen_renderer=False,
-        use_camera_obs=False,
-        reward_shaping=True,
-        control_freq=30
+        robots                 = 'Panda',
+        has_renderer           = False,
+        has_offscreen_renderer = False,
+        use_camera_obs         = False,
+        reward_shaping         = True,
+        control_freq           = 30
     )
     obs = env_rs.reset()
     sim = env_rs.sim
@@ -290,7 +290,7 @@ def test_with_model():
 
         episodes_completed += 1
         ep_info = info[0] if info else {}
-        success = ep_info.get('success', False)
+        success = ep_info.get('is_success', False)
         if success:
             episodes_success += 1
 
