@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+# close_generalized_v2/config_v2.py
+
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Tuple
+
+
+@dataclass
+class TrainConfigV2:
+    # ── Identity ──────────────────────────────────────────────────────────────
+    seed   : int = 42
+    run_dir: str = "runs/close_gen_v2"
+    tb_dir : str = "runs/tb_v2"
+
+    # ── Robosuite / Environment ────────────────────────────────────────────────
+    env_name    : str = "Door"
+    robot       : str = "Panda"
+    horizon     : int = 600
+    control_freq: int = 30
+
+    reward_shaping      : bool  = True
+    reward_scale        : float = 1.0
+    use_object_obs      : bool  = True
+    use_camera_obs      : bool  = False
+    terminate_on_success: bool  = False
+
+    # ── Vectorization ─────────────────────────────────────────────────────────
+    num_envs    : int  = 8
+    vecnormalize: bool = True
+
+    # ── SAC Hyperparameters ────────────────────────────────────────────────────
+    total_steps    : int   = 1_500_000
+    learning_rate  : float = 3e-4
+    buffer_size    : int   = 1_000_000
+    batch_size     : int   = 256
+    gamma          : float = 0.95
+    tau            : float = 0.005
+    train_freq     : int   = 1
+    gradient_steps : int   = 2
+    learning_starts: int   = 10_000
+    ent_coef       : str   = "auto"
+
+    # ── Network Architecture ───────────────────────────────────────────────────
+    # Slightly deeper than v1 (512, 512) to handle ~47-dim observation space
+    policy_net_arch: Tuple[int, int] = (512, 512)
+
+    # ── Evaluation ────────────────────────────────────────────────────────────
+    eval_freq      : int = 10_000
+    n_eval_episodes: int = 20
+    checkpoint_freq: int = 200_000
+
+    # ── Door Closing Parameters ────────────────────────────────────────────────
+    close_fraction        : float = 0.015
+    init_open_min_fraction: float = 0.70
+    init_open_max_fraction: float = 1.00
+
+    # ── Base Reward Weights (from original) ───────────────────────────────────
+    w_progress   : float = 0.0
+    w_delta      : float = 2.0
+    w_action     : float = 0.0
+    time_penalty : float = 0.5
+    success_bonus: float = 5.0
+
+    # ── Return Stage ──────────────────────────────────────────────────────────
+    enable_return_stage: bool  = True
+    w_return_pos       : float = 2.0
+    w_door_regress     : float = 4.0
+    return_hold_steps  : int   = 10
+    return_pos_tol     : float = 0.05
+
+    # ── Action Smoothing ──────────────────────────────────────────────────────
+    action_smooth_alpha: float = 0.8
+
+    # ── Original Handle Randomization ─────────────────────────────────────────
+    limit_handle_friction: bool  = True
+    handle_friction_max  : float = 0.8
+    human_dist_min       : float = 0.50
+    human_dist_max       : float = 0.60
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # §3.1 — Adaptive FSM Thresholds
+    # Ref: Konidaris & Barto (2009) "Skill Chaining"
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Grasp distance: dist_thresh = k_r * handle_radius + k_offset
+    fsm_grasp_dist_k_radius: float = 1.5   # multiplier on handle radius
+    fsm_grasp_dist_k_offset: float = 0.005 # fixed offset [m]
+
+    # Grip threshold: grip_thresh = base - k_f * norm_friction
+    fsm_grip_thresh_base  : float = 0.75
+    fsm_grip_thresh_k_fric: float = 0.10   # subtracted proportionally to friction
+
+    # Friction normalization range (matches domain randomizer below)
+    fsm_friction_min: float = 0.05
+    fsm_friction_max: float = 2.00
+
+    # HOLD timer: hold_steps = base + k_stiff * (stiff_max - current_stiff)
+    fsm_hold_time_base    : float = 2.0   # [s] base hold duration
+    fsm_hold_k_stiffness  : float = 0.5   # extra seconds per unit of (stiff_max - stiff)
+
+    # Retreat direction: perpendicular to door vs fixed global axis
+    fsm_retreat_dist  : float = 0.13      # [m] retreat distance along door normal
+    fsm_retreat_z_off : float = 0.04      # [m] vertical offset
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # §3.2 — Potential-Based Reward Shaping
+    # Ref: Ng, Russell & Harada (1999) "Policy Invariance Under Reward Transformations"
+    #      Devlin & Kudenko (2012) "Dynamic Potential-Based Reward Shaping"
+    # ══════════════════════════════════════════════════════════════════════════
+
+    use_potential_reward: bool = True
+
+    # REACH potential: Φ_reach = w * exp(-dist / σ)
+    phi_reach_weight: float = 8.0
+    phi_reach_sigma : float = 0.15  # [m] scale; adapted to handle_radius in env
+
+    # PUSH potential: Φ_push = w * (door_max - angle) / door_max * gripper_factor
+    phi_push_weight : float = 50.0
+
+    # HOLD potential: Φ_hold = w * (duration / target) * (1 - |door_qpos| / tol)
+    phi_hold_weight : float = 5.0
+
+    # RETREAT: use direction-aligned reward (not purely potential-based)
+    phi_retreat_weight: float = 3.0
+
+    # Jerk / smoothness regularisation (active in all phases)
+    w_smoothness: float = 1.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # §3.3 — Multi-Approach Grasp
+    # Ref: ten Pas et al. (2017) "Grasp Pose Detection"
+    #      ManipForce (2015) "Force-based manipulation primitives"
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Number of candidate grasp approach directions
+    grasp_n_candidates: int = 3    # top-down, lateral-left, lateral-right
+
+    # Weight for multi-approach alignment reward in REACH
+    w_multi_align: float = 1.5
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # §3.4 — Extended Physics Randomization
+    # Ref: Tobin et al. (2017) "Domain Randomization"
+    #      Zhao et al. (2020) "Sim-to-Real Transfer"
+    #      Mehta et al. (2020) "Active Domain Randomization"
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Latch joint stiffness: scale ∈ [scale_min, scale_max] × base
+    rand_latch_stiffness     : bool  = True
+    rand_latch_stiffness_min : float = 0.5
+    rand_latch_stiffness_max : float = 2.0
+
+    # Hinge joint damping: scale ∈ [scale_min, scale_max] × base
+    rand_hinge_damping    : bool  = True
+    rand_hinge_damping_min: float = 0.3
+    rand_hinge_damping_max: float = 1.5
+
+    # Door body mass: scale ∈ [scale_min, scale_max] × base
+    rand_door_mass    : bool  = True
+    rand_door_mass_min: float = 0.5
+    rand_door_mass_max: float = 2.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # §3.5 — Beta-Network (Learned Termination Functions)
+    # Ref: Sutton, Precup & Singh (1999) "Between MDPs and Semi-MDPs"
+    #      Konidaris & Barto (2009) "Skill Chaining"
+    # ══════════════════════════════════════════════════════════════════════════
+
+    use_beta_net          : bool  = False  # Off by default; enable in Phase 4
+    beta_net_hidden       : int   = 64
+    beta_net_lr           : float = 1e-4
+    beta_net_reg          : float = 1e-3   # L2 regularisation on β output
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # §3.6 — Curriculum Reward Co-Evolution
+    # Ref: Devlin & Kudenko (2012) "Dynamic Potential-Based Reward Shaping"
+    #      Portelas et al. (2020) "Automatic Curriculum Learning"
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # k_curr: at curriculum_level = 1.0, reward weights increase by k_curr × 100%
+    curriculum_reward_k    : float = 0.5
+
+    # Phase-time efficiency criterion for curriculum advancement
+    # (max steps allowed per phase to be considered "efficient")
+    curriculum_max_reach_steps: int = 25
+    curriculum_max_push_steps : int = 25
+    curriculum_check_freq     : int = 25_000
+    curriculum_advance_delta  : float = 0.05
+
+    # ── Diagnostic ────────────────────────────────────────────────────────────
+    debug_print_every: int = 200

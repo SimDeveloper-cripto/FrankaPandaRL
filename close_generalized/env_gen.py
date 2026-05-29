@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # close_generalized/env_gen.py
 
+# Robosuite Env. for Generalized Door Closing Task
+
 import numpy as np
 from train_close import RoboSuiteDoorCloseGymnasiumEnv
 from scipy.spatial.transform import Rotation as R_scipy

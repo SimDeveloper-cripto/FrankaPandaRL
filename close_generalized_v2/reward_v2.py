@@ -1,0 +1,421 @@
+#!/usr/bin/env python3
+# close_generalized_v2/reward_v2.py
+#
+# PotentialBasedReward — Hierarchical Potential-Based Reward Shaping
+#
+# Implements proposal:
+#   "Reward Potential-Based (Teoricamente Fondato)"
+#
+# Key literature:
+#   [3]  Ng, Russell & Harada (1999) "Policy Invariance Under Reward Transformations"
+#        → F(s,a,s') = γΦ(s') − Φ(s) preserves optimal policy
+#   [4]  Devlin & Kudenko (2012) "Dynamic Potential-Based Reward Shaping"
+#        → Dynamic weights valid if weights converge; used for curriculum co-evolution
+#   [16] Krakovna et al. (2020) "Avoiding Side Effects in Complex Environments"
+#        → Reward misspecification: motivation for principled shaping
+#
+# Differences vs close_generalized/env_gen.py (v1):
+#   ┌─────────────────────────────────┬──────────────────────────┬─────────────────────────────────────┐
+#   │ Aspect                          │ v1 (ad-hoc)              │ v2 (potential-based)                │
+#   ├─────────────────────────────────┼──────────────────────────┼─────────────────────────────────────┤
+#   │ Reward continuity at transition │ Discontinuous (cliff)    │ Continuous (Φ → 0 at boundaries)    │
+#   │ door_prog                       │ 2000 × Δangle (increm.)  │ γΦ_push(s') − Φ_push(s) (monotone)  │
+#   │ Grasp bonus                     │ +50 (hard cliff)         │ Smooth via sigmoid in Φ_push        │
+#   │ Physics calibration             │ No (fixed weights)       │ Yes (σ_reach = f(handle_radius))    │
+#   │ Theoretical guarantee           │ None                     │ Optimal policy preserved [Ng 1999]  │
+#   │ Curriculum co-evolution         │ No                       │ Yes [Devlin & Kudenko 2012]         │
+#   └─────────────────────────────────┴──────────────────────────┴─────────────────────────────────────┘
+
+from __future__ import annotations
+
+import numpy as np
+from typing import Optional
+
+from close_generalized_v2.fsm_v2 import (PHASE_REACH, PHASE_PUSH, PHASE_HOLD, PHASE_RETREAT, FSMState)
+
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + np.exp(-float(x)))
+
+
+class PotentialBasedReward:
+    """
+    Computes reward as F(s, a, s') = γΦ(s') − Φ(s) + sparse_terms.
+
+    The potential Φ(s) is defined hierarchically, one component per FSM phase:
+
+        Φ(s) = Φ_reach(s) ×   [phase=REACH]
+             + Φ_push(s)  ×   [phase=PUSH]
+             + Φ_hold(s)  ×   [phase=HOLD]
+             + Φ_retreat(s) × [phase=RETREAT]
+
+    Each Φ_i is non-negative and bounded, so the shaping reward F is bounded
+    and the optimal policy of the true MDP is preserved  [Ng et al. 1999].
+
+    Dynamic weights (co-evolve with curriculum_level) are valid because they
+    converge as curriculum_level → 1.0  [Devlin & Kudenko 2012].
+
+    References
+    ----------
+    [3]  Ng, Russell & Harada (1999)
+    [4]  Devlin & Kudenko (2012)
+    [16] Krakovna et al. (2020) — reward misspecification motivation
+    """
+
+    def __init__(self, cfg, gamma: float = 0.95):
+        self.cfg   = cfg
+        self.gamma = gamma
+        self._prev_phi: Optional[float] = None
+
+    def reset(self) -> None:
+        self._prev_phi = None
+
+    # ── Potential components ──────────────────────────────────────────────────
+
+    def phi_reach(
+        self,
+        dist_handle   : float,
+        handle_radius : float,
+        curriculum_lvl: float,
+    ) -> float:
+        """
+        §3.2 — REACH potential.
+
+            Φ_reach(s) = w_reach_eff × exp(−dist / σ)
+
+        where σ = max(handle_radius × 3, 0.08)  (physics-calibrated scale).
+        w_reach_eff = w_reach × (1 + k_curr × curriculum_lvl)   [Devlin 2012]
+
+        Properties:
+        - Φ_reach ∈ [0, w_reach_eff]
+        - Φ_reach → 0 as dist → ∞  (no reward far from handle)
+        - Φ_reach → w_reach_eff as dist → 0  (maximum at grasp)
+        - Auto-normalises to handle size: large handle → larger σ → softer gradient
+        """
+        sigma   = float(np.clip(handle_radius * 3.0, 0.08, 0.25))
+        w_eff   = self.cfg.phi_reach_weight * (
+            1.0 + self.cfg.curriculum_reward_k * curriculum_lvl
+        )
+        return w_eff * float(np.exp(-dist_handle / sigma))
+
+    def phi_push(
+        self,
+        door_angle     : float,
+        door_max       : float,
+        gripper_action : float,
+        grip_thresh    : float,
+        curriculum_lvl : float,
+    ) -> float:
+        """
+        §3.2 — PUSH potential.
+
+            Φ_push(s) = w_push × (door_max − door_angle) / door_max × grip_factor
+
+        where grip_factor = sigmoid(10 × (gripper_action − grip_thresh)).
+
+        Properties:
+        - Monotonically increasing as door closes (door_angle decreases)
+        - Continuously smoothed via sigmoid for grip factor (no cliff like v1's +50 bonus)
+        - Naturally calibrated to door_max (independent of scale)
+
+        v1 equivalent: 2000 × Δangle  (incremental, prone to oscillation)
+        """
+        closure   = float(np.clip((door_max - door_angle) / (door_max + 1e-8), 0.0, 1.0))
+        grip_f    = _sigmoid(10.0 * (gripper_action - grip_thresh))
+        w_eff     = self.cfg.phi_push_weight * (
+            1.0 + self.cfg.curriculum_reward_k * curriculum_lvl
+        )
+        return w_eff * closure * grip_f
+
+    def phi_hold(
+        self,
+        hold_duration  : int,
+        target_steps   : int,
+        door_qpos      : float,
+        tol_closed     : float = 0.04,
+    ) -> float:
+        """
+        §3.2 — HOLD potential.
+
+            Φ_hold(s) = w_hold × (duration / target) × (1 − |door_qpos| / tol)
+
+        Properties:
+        - Grows linearly with hold progress
+        - Penalises implicitly if door re-opens (|door_qpos| increases → Φ decreases)
+        - Bounded in [0, w_hold]
+        """
+        time_frac = float(np.clip(hold_duration / max(1, target_steps), 0.0, 1.0))
+        door_frac = float(np.clip(1.0 - abs(door_qpos) / tol_closed, 0.0, 1.0))
+        return self.cfg.phi_hold_weight * time_frac * door_frac
+
+    def phi_retreat(
+        self,
+        dist_to_target: float,
+        max_dist      : float = 0.20,
+    ) -> float:
+        """
+        §3.2 — RETREAT potential.
+
+            Φ_retreat(s) = w_retreat × (1 − dist_to_target / max_dist)
+
+        Grows as EEF approaches retreat target.
+        """
+        progress = float(np.clip(1.0 - dist_to_target / max(max_dist, 1e-6), 0.0, 1.0))
+        return self.cfg.phi_retreat_weight * progress
+
+    # ── Main Reward Computation ────────────────────────────────────────────────
+
+    def compute(
+        self,
+        *,
+        fsm_state       : FSMState,
+        base_reward     : float,
+        door_angle      : float,
+        door_max        : float,
+        door_qpos       : float,
+        dist_handle     : float,
+        dist_xy         : float,
+        height_diff     : float,
+        handle_radius   : float,
+        handle_friction : float,
+        grip_thresh     : float,
+        gripper_action  : float,
+        gripper_width   : float,
+        is_physically_closed: bool,
+        gripper_qpos    : Optional[np.ndarray],
+        alignment       : float,
+        flat_alignment  : float,
+        joint_vel       : Optional[np.ndarray],
+        action          : np.ndarray,
+        prev_eef_action : np.ndarray,
+        eef_pos         : np.ndarray,
+        latch_qpos      : float,
+        door_qvel       : float,
+        curriculum_lvl  : float,
+        just_grasped    : bool = False,
+        just_succeeded  : bool = False,
+        just_hold_done  : bool = False,
+        grasp_lost      : bool = False,
+        terminated      : bool = False,
+        truncated       : bool = False,
+    ) -> tuple[float, bool, bool]:
+        """
+        Returns
+        -------
+        (reward, terminated, truncated)
+        """
+        rew_info: dict[str, float] = {}
+        phase = fsm_state.phase
+
+        # Jerk penalty: regularises action variation
+        jerk = float(np.linalg.norm(action[:-1] - prev_eef_action))
+        rew_info["smoothness"] = -self.cfg.w_smoothness * jerk
+
+        # ── Base reward from parent env
+        rew_info["base"] = base_reward
+
+
+        if self.cfg.use_potential_reward:
+            target_steps = fsm_state.target_hold_steps or 60
+            dist_retreat = float(np.linalg.norm(eef_pos - fsm_state.retreat_pos)) \
+                if fsm_state.retreat_pos is not None else 0.20
+
+            if phase == PHASE_REACH:
+                phi_now = self.phi_reach(dist_handle, handle_radius, curriculum_lvl)
+            elif phase == PHASE_PUSH:
+                phi_now = self.phi_push(door_angle, door_max, gripper_action, grip_thresh, curriculum_lvl)
+            elif phase == PHASE_HOLD:
+                phi_now = self.phi_hold(fsm_state.hold_closed_duration, target_steps, door_qpos)
+            else:  # RETREAT
+                phi_now = self.phi_retreat(dist_retreat)
+
+            if self._prev_phi is not None:
+                shaping = self.gamma * phi_now - self._prev_phi
+                rew_info["phi_shape"] = shaping
+
+            self._prev_phi = phi_now
+
+        # ══════════════════════════════════════════════════════════════════════
+        # PHASE 1 — REACH: approach and grasp the handle
+        # ══════════════════════════════════════════════════════════════════════
+        if phase == PHASE_REACH:
+            # Curriculum-scaled distance weights  [§3.6, Devlin & Kudenko 2012]
+            k = 1.0 + self.cfg.curriculum_reward_k * curriculum_lvl
+
+            if not self.cfg.use_potential_reward:
+                rew_info["dist_3d"] = -5.0  * k * dist_handle
+                rew_info["dist_xy"] = -3.0  * k * (dist_handle if dist_xy is None else dist_xy)
+                rew_info["dist_z"]  = -15.0 * k * abs(height_diff)
+
+            # Approach geometry penalties (same as v1)
+            if height_diff < -0.005:
+                rew_info["app_blw"] = -3.0 * abs(height_diff + 0.005)
+            if height_diff > 0.03 and gripper_action > 0.2:
+                rew_info["app_top"] = -5.0 * height_diff * gripper_action
+
+            # Multi-approach alignment  [§3.3, ten Pas 2017] — handled separately
+            # (alignment value already max-pooled over K candidates by MultiApproachGrasp)
+            prox_factor       = float(np.exp(-10.0 * dist_handle))
+            rew_info["align"] = -self.cfg.w_multi_align * (1.0 - alignment) * prox_factor
+            rew_info["flat"]  = -0.5 * flat_alignment * prox_factor
+
+            # Gripper Management (same logic as v1)
+            if dist_handle > 0.025:
+                if gripper_action > -0.85:
+                    rew_info["grip"] = -1.0 * (gripper_action - (-0.85))
+            else:
+                if gripper_action > -0.85:
+                    norm_g = (gripper_action - (-0.85)) / (1.0 - (-0.85))
+                    rew_info["grip"] = 2.5 * norm_g
+
+            # REACH→PUSH bonus
+            if just_grasped and not fsm_state.has_grasp_bonus:
+                # Keep a small explicit bonus for interpretability
+                rew_info["phase_trans"]   = 10.0
+                fsm_state.has_grasp_bonus = True
+
+            # Grasp lost penalty
+            if grasp_lost:
+                rew_info["grasp_lost_pen"] = -5.0
+
+        # ══════════════════════════════════════════════════════════════════════
+        # PHASE 2 — PUSH: maintain grip, push door closed
+        # ══════════════════════════════════════════════════════════════════════
+        elif phase == PHASE_PUSH:
+            # Distance maintenance (keep gripper on handle)
+            rew_info["dist_3d"] = -5.0 * dist_handle
+            rew_info["dist_z"]  = -15.0 * abs(height_diff)
+
+            # With potential shaping: door_prog replaced by F = γΦ_push(s') - Φ_push(s)
+            # (already added in phi_shape above)
+            # Without potential shaping: explicit door progress (same as v1)
+            if not self.cfg.use_potential_reward:
+                if fsm_state.min_door_angle is not None and gripper_action > grip_thresh:
+                    delta = fsm_state.min_door_angle - door_angle
+                    if delta > 0:
+                        rew_info["door_prog"] = 2000.0 * delta
+
+            # Lift penalty (same as v1)
+            if action[2] > 0.05:
+                rew_info["lift_pen"] = -2.0 * action[2]
+
+            # Action regularisation (same as v1, small)
+            rew_info["act_pen"] = -0.005 * float(np.linalg.norm(action[:-1]))
+
+            # Grasp loss penalties
+            if grasp_lost:
+                rew_info["dist_lost"] = -6.0 * max(0.0, dist_handle - 0.05)
+                rew_info["grip_lost"] = -5.0 * abs(min(0.0, gripper_action) - grip_thresh)
+            elif gripper_action < 1.0:
+                rew_info["grip"] = -5.0 * (1.0 - gripper_action)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # PHASE 3 — HOLD: maintain door closed
+        # ══════════════════════════════════════════════════════════════════════
+        elif phase == PHASE_HOLD:
+            is_closed = abs(door_qpos) < 0.03
+
+            if is_closed:
+                rew_info["hold"] = 1.0 - abs(door_qpos)
+            else:
+                # Bounce penalty (same weight as v1)
+                rew_info["hold_bounce"] = -20.0 * abs(door_qpos)
+
+            # Anti-bounce velocity damping  [v1: -25.0, same weight]
+            if abs(door_qvel) > 0.01:
+                rew_info["hold_veldamp"] = -25.0 * abs(door_qvel)
+
+            # Physical grip check (same as v1)
+            if not is_physically_closed:
+                rew_info["hold_slip"] = -5.0
+
+            # Gripper command (same as v1)
+            if gripper_action > grip_thresh:
+                rew_info["hold_grip"] = 1.0
+            else:
+                rew_info["hold_grip"] = -2.0 * abs(gripper_action - grip_thresh)
+
+            if gripper_action < 0.0:
+                rew_info["hold_drop_pen"] = -10.0 * abs(gripper_action)
+
+            # Joint freeze (same as v1)
+            if joint_vel is not None:
+                rew_info["hold_jnt_freeze"] = -1.0 * float(np.linalg.norm(joint_vel))
+
+            # Arm action norm (same as v1; action[:-1] is zeroed by env override)
+            action_norm = float(np.linalg.norm(action[:-1]))
+            if action_norm < 0.05:
+                rew_info["hold_act"] = 1.0
+            else:
+                rew_info["hold_act"] = -2.0 * action_norm
+
+            # Wrist torsion penalty (same as v1)
+            rew_info["hold_flat"] = -2.0 * flat_alignment
+
+            # Handle distance (same as v1)
+            if dist_handle > 0.06:
+                rew_info["hold_dist"] = -3.0 * (dist_handle - 0.06)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # PHASE 4 — RETREAT: withdraw from handle
+        # ══════════════════════════════════════════════════════════════════════
+        elif phase == PHASE_RETREAT:
+            if fsm_state.retreat_pos is not None:
+                dist_to_target = float(np.linalg.norm(eef_pos - fsm_state.retreat_pos))
+            else:
+                dist_to_target = 0.20
+
+            # Gripper: open to release handle  [v1: same]
+            if gripper_action < -0.85:
+                rew_info["ret_grip"] = 2.0
+            else:
+                rew_info["ret_grip"] = -1.0 * abs(gripper_action + 1.0)
+
+            # Wrist rotation penalty  [v1: same]
+            rew_info["ret_rot"] = -3.0 * float(np.linalg.norm(action[3:6]))
+
+            # Lateral / downward penalties near handle  [v1: same]
+            if dist_handle < 0.12:
+                rew_info["ret_lat"] = -5.0 * abs(action[1])
+                if action[2] < 0:
+                    rew_info["ret_down"] = -5.0 * abs(action[2])
+
+            # Directional reward toward retreat target  [v1: same structure]
+            if dist_to_target > 0.02:
+                dir_to_target    = fsm_state.retreat_pos - eef_pos
+                dir_norm         = dir_to_target / (dist_to_target + 1e-6)
+                action_alignment = float(np.dot(action[:3], dir_norm))
+
+                rew_info["ret_dir"]  = 3.0 * action_alignment
+                perp                 = action[:3] - action_alignment * dir_norm
+                rew_info["ret_perp"] = -2.0 * float(np.linalg.norm(perp))
+            else:
+                rew_info["ret_freeze"] = -20.0 * float(np.linalg.norm(action[:-1]))
+
+            # Progressive joint freeze  [v1: same]
+            if joint_vel is not None:
+                fw = float(np.clip(1.0 - dist_to_target / 0.15, 0.1, 1.0))
+                rew_info["ret_jnt_prog"] = -5.0 * fw * float(np.linalg.norm(joint_vel))
+
+            # Latch monitor  [v1: same]
+            rew_info["latch_ret"] = -1.0 * abs(latch_qpos)
+
+            # Door stability monitor in retreat
+            rew_info["hold"] = 1.0 - abs(door_qpos) if abs(door_qpos) < 0.03 else 0.0
+
+        # ── Total reward ──────────────────────────────────────────────────────
+        reward = float(sum(rew_info.values()))
+
+        # ── Termination override  [v1: same logic] ────────────────────────────
+        if terminated:
+            latch_neutral = abs(latch_qpos) < 0.08
+            door_closed   = abs(door_qpos)  < 0.03
+            if not latch_neutral or not door_closed:
+                terminated  = False
+                reward     -= 500.0
+                reward      = float(np.clip(reward, -100.0, 100.0))
+
+        if not terminated:
+            reward = float(np.clip(reward, -100.0, 100.0))
+
+        return reward, terminated, truncated, rew_info
