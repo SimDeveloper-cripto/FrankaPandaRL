@@ -210,4 +210,4 @@ class TrainConfigV2:
     curriculum_advance_delta  : float = 0.05
 
     # ── Diagnostic ────────────────────────────────────────────────────────────
-    debug_print_every: int = 200
+    debug_print_every: int = 200  # :)
