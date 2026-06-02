@@ -41,6 +41,15 @@ class TrainConfigV2:
     learning_starts: int   = 20_000 # was 10k — more random steps before policy locks in
     ent_coef       : str   = "auto"
 
+    # §1.13 — Pavimento di entropia per SAC. Con il default target_entropy = −dim_azione
+    # (≈ −7 per OSC_POSE), ent_coef collassa a ~7e-5 → esplorazione nulla. Se ciò avviene
+    # PRIMA che la policy scopra la sequenza di chiusura, resta intrappolata nell'ottimo
+    # locale di "accampamento" in REACH. Un target meno negativo mantiene l'esplorazione
+    # viva attraverso la finestra di scoperta, senza impedire la convergenza finale
+    # (SAC continua ad auto-tarare ent_coef verso questo target). Tunabile: per azione a
+    # 4 dimensioni usare ~ −2.0.
+    target_entropy : float = -3.0
+
     # ── Network Architecture ───────────────────────────────────────────────────
     # Slightly deeper than v1 (512, 512) to handle ~47-dim observation space
     policy_net_arch: Tuple[int, int] = (512, 512)

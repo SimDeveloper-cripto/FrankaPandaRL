@@ -354,8 +354,15 @@ class PotentialBasedReward:
             if grasp_lost:
                 rew_info["dist_lost"] = -6.0 * max(0.0, dist_handle - 0.05)
                 rew_info["grip_lost"] = -5.0 * abs(min(0.0, gripper_action) - grip_thresh)
-            elif gripper_action < 1.0:
-                rew_info["grip"] = -5.0 * (1.0 - gripper_action)
+            elif gripper_action < grip_thresh:
+                # §1.13 — Penalizza SOLO una presa genuinamente debole (sotto la soglia di
+                # presa adattiva), in modo dolce. La versione precedente
+                # `grip = -5·(1 − gripper_action)` pretendeva il gripper a +1.0 ESATTO:
+                # tassava anche una presa valida (es. 0.8 con soglia 0.75 → −1.0/step) e
+                # diventava −10/step se il gripper si apriva. Questo trasformava PUSH in
+                # un campo minato a valore atteso negativo, spingendo la policy a
+                # "accamparsi" in REACH (vedi §1.13). Ora una presa ≥ soglia non paga nulla.
+                rew_info["grip"] = -2.0 * (grip_thresh - gripper_action)
 
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 3 — HOLD: maintain door closed

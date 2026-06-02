@@ -367,6 +367,7 @@ def main():
                 gradient_steps  = cfg.gradient_steps,
                 learning_starts = cfg.learning_starts,
                 ent_coef        = cfg.ent_coef,
+                target_entropy  = cfg.target_entropy,
                 policy_kwargs   = dict(net_arch=list(cfg.policy_net_arch)),
             )
 
