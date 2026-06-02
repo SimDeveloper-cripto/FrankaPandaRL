@@ -30,15 +30,15 @@ class TrainConfigV2:
     vecnormalize: bool = True
 
     # ── SAC Hyperparameters ────────────────────────────────────────────────────
-    total_steps    : int   = 1_500_000
+    total_steps    : int   = 500_000 # 1_500_000
     learning_rate  : float = 3e-4
     buffer_size    : int   = 1_000_000
     batch_size     : int   = 256
     gamma          : float = 0.95
     tau            : float = 0.005
     train_freq     : int   = 1
-    gradient_steps : int   = 2
-    learning_starts: int   = 10_000
+    gradient_steps : int   = 1      # was 2 — reduce to slow down Q overfit during early exploration
+    learning_starts: int   = 20_000 # was 10k — more random steps before policy locks in
     ent_coef       : str   = "auto"
 
     # ── Network Architecture ───────────────────────────────────────────────────
@@ -59,7 +59,7 @@ class TrainConfigV2:
     w_progress   : float = 0.0
     w_delta      : float = 2.0
     w_action     : float = 0.0
-    time_penalty : float = 0.5
+    time_penalty : float = 0.1   # was 0.5 — reduced: -0.50/step (-300/ep) drowned shaping signal
     success_bonus: float = 5.0
 
     # ── Return Stage ──────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ class TrainConfigV2:
     return_pos_tol     : float = 0.05
 
     # ── Action Smoothing ──────────────────────────────────────────────────────
-    action_smooth_alpha: float = 0.8
+    action_smooth_alpha: float = 0.95  # was 0.8 — reduced jerk, making smoothness penalty less punishing
 
     # ── Original Handle Randomization ─────────────────────────────────────────
     limit_handle_friction: bool  = True
@@ -90,6 +90,12 @@ class TrainConfigV2:
     # Grip threshold: grip_thresh = base - k_f * norm_friction
     fsm_grip_thresh_base  : float = 0.75
     fsm_grip_thresh_k_fric: float = 0.10   # subtracted proportionally to friction
+
+    # §1.11 — Schmitt trigger + hysteresis on grasp loss (anti-chatter).
+    # Release the grasp at a LOWER threshold than required to enter PUSH, and only
+    # after several consecutive bad frames. Kills the REACH<->PUSH chatter seen at 400k.
+    fsm_grip_release_margin: float = 0.20  # release_thresh = grip_thresh - this
+    fsm_grasp_lose_steps   : int   = 3     # consecutive bad frames before declaring loss
 
     # Friction normalization range (matches domain randomizer below)
     fsm_friction_min: float = 0.05
@@ -111,21 +117,36 @@ class TrainConfigV2:
 
     use_potential_reward: bool = True
 
-    # REACH potential: Φ_reach = w * exp(-dist / σ)
-    phi_reach_weight: float = 8.0
-    phi_reach_sigma : float = 0.15  # [m] scale; adapted to handle_radius in env
+    # ── Potential magnitudes ──────────────────────────────────────────────────
 
-    # PUSH potential: Φ_push = w * (door_max - angle) / door_max * gripper_factor
-    phi_push_weight : float = 50.0
+    # CRITICAL: these are now SMALL on purpose. Potential-based shaping is an
+    # auxiliary GUIDANCE term, not the objective. With the cumulative design,
+    # Phi accumulates across phases (Phi_reach + Phi_push + Phi_hold + ...), and the
+    # discounted shaping F = (gamma * Phi') - Phi leaves a standing drift of
+    # (gamma-1) * Phi = -0.05 * Phi, per step. The previous values (25/50/5) made
+    # Phi ~ 75-100 -> a -3.75..-5/step penalty that punished the agent for staying
+    # in PUSH/HOLD/RETREAT (lethal, since the arm is frozen in HOLD). See §1.10.A.
+    #
+    # With these O(1-5) values: Phi_HOLD ~ 5-9 -> drift <= -0.5/step, fully dwarfed
+    # by the genuine reward (dense reach + ratcheted door progress + +1/step hold
+    # bonuses).
+    # gamma stays at 0.95, so Ng et al. (1999) policy invariance is EXACT.
+    # The grasp transition still gets a clean ~+gamma * w_reach bonus from the Phi jump.
 
-    # HOLD potential: Φ_hold = w * (duration / target) * (1 - |door_qpos| / tol)
-    phi_hold_weight : float = 5.0
+    phi_reach_weight: float = 2.0    # was 25.0 — sets the REACH->PUSH shaping bonus / ladder base
+    phi_reach_sigma : float = 0.40   # (unused for shaping; Phi_reach=0 in REACH by design)
 
-    # RETREAT: use direction-aligned reward (not purely potential-based)
-    phi_retreat_weight: float = 3.0
+    # PUSH potential: Phi_push = w * (door_max - angle)/door_max * grip_factor
+    phi_push_weight : float = 3.0    # was 50.0 — closing is driven by door_prog (real R), not this
+
+    # HOLD potential: Phi_hold = w * (duration/target) * (1 - |door_qpos|/tol)
+    phi_hold_weight : float = 2.0    # was 5.0
+
+    # RETREAT: direction-aligned reward (mostly explicit, not purely potential)
+    phi_retreat_weight: float = 2.0  # was 3.0
 
     # Jerk / smoothness regularisation (active in all phases)
-    w_smoothness: float = 1.0
+    w_smoothness: float = 0.3   # was 1.0 — high smoothness penalty was teaching "don't move"
 
     # ══════════════════════════════════════════════════════════════════════════
     # §3.3 — Multi-Approach Grasp

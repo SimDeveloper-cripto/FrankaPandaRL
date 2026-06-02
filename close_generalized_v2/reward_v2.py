@@ -66,9 +66,15 @@ class PotentialBasedReward:
         self.cfg   = cfg
         self.gamma = gamma
         self._prev_phi: Optional[float] = None
+        # Reward-owned ratchet for the PUSH door-progress reward.
+        # MUST be independent of fsm_state.min_door_angle: the FSM updates its own
+        # min BEFORE the reward runs (env_v2 calls fsm.update() then reward.compute()),
+        # so reading the FSM's min would always give delta=0. See §1.10.C.
+        self._min_door_angle: Optional[float] = None
 
     def reset(self) -> None:
-        self._prev_phi = None
+        self._prev_phi       = None
+        self._min_door_angle = None
 
     # ── Potential components ──────────────────────────────────────────────────
 
@@ -92,7 +98,7 @@ class PotentialBasedReward:
         - Φ_reach → w_reach_eff as dist → 0  (maximum at grasp)
         - Auto-normalises to handle size: large handle → larger σ → softer gradient
         """
-        sigma   = float(np.clip(handle_radius * 3.0, 0.08, 0.25))
+        sigma   = float(np.clip(handle_radius * 3.0, self.cfg.phi_reach_sigma * 0.25, self.cfg.phi_reach_sigma))
         w_eff   = self.cfg.phi_reach_weight * (
             1.0 + self.cfg.curriculum_reward_k * curriculum_lvl
         )
@@ -220,18 +226,37 @@ class PotentialBasedReward:
             dist_retreat = float(np.linalg.norm(eef_pos - fsm_state.retreat_pos)) \
                 if fsm_state.retreat_pos is not None else 0.20
 
+            # Cumulative base weights to guarantee continuity across transitions
+            w_reach_eff = self.cfg.phi_reach_weight * (1.0 + self.cfg.curriculum_reward_k * curriculum_lvl)
+            w_push_eff  = self.cfg.phi_push_weight  * (1.0 + self.cfg.curriculum_reward_k * curriculum_lvl)
+            w_hold_eff  = self.cfg.phi_hold_weight
+
             if phase == PHASE_REACH:
-                phi_now = self.phi_reach(dist_handle, handle_radius, curriculum_lvl)
+                phi_now = 0.0
             elif phase == PHASE_PUSH:
-                phi_now = self.phi_push(door_angle, door_max, gripper_action, grip_thresh, curriculum_lvl)
+                phi_now = w_reach_eff + self.phi_push(door_angle, door_max, gripper_action, grip_thresh, curriculum_lvl)
             elif phase == PHASE_HOLD:
-                phi_now = self.phi_hold(fsm_state.hold_closed_duration, target_steps, door_qpos)
+                phi_now = w_reach_eff + w_push_eff + self.phi_hold(fsm_state.hold_closed_duration, target_steps, door_qpos)
             else:  # RETREAT
-                phi_now = self.phi_retreat(dist_retreat)
+                phi_now = w_reach_eff + w_push_eff + w_hold_eff + self.phi_retreat(dist_retreat)
 
             if self._prev_phi is not None:
+                # Ng et al. (1999) shaping, kept EXACT at the MDP's gamma so the
+                # optimal policy of the true reward R is provably preserved.
+                #
+                # The previous v2 made this term lethal NOT because of gamma, but
+                # because the cumulative offsets made Phi huge (~25..100). The
+                # discount term (gamma-1)*Phi then imposed a standing penalty of
+                # -0.05*Phi per step (up to -5/step in the FROZEN hold phase),
+                # punishing the agent for *being* in PUSH/HOLD/RETREAT. See §1.10.A.
+                #
+                # Fix: the potentials are now small (O(1-5), see config_v2), so the
+                # drift is <= -0.5/step and is dwarfed by the genuine reward terms.
+                # The task objective lives in R (dense reach + ratcheted door
+                # progress + sparse hold), NOT in the shaping. This is exactly the
+                # role Ng et al. intend for Phi: guidance, not objective.
                 shaping = self.gamma * phi_now - self._prev_phi
-                rew_info["phi_shape"] = shaping
+                rew_info["phi_shape"] = float(np.clip(shaping, -10.0, 10.0))
 
             self._prev_phi = phi_now
 
@@ -242,16 +267,24 @@ class PotentialBasedReward:
             # Curriculum-scaled distance weights  [§3.6, Devlin & Kudenko 2012]
             k = 1.0 + self.cfg.curriculum_reward_k * curriculum_lvl
 
-            if not self.cfg.use_potential_reward:
-                rew_info["dist_3d"] = -5.0  * k * dist_handle
-                rew_info["dist_xy"] = -3.0  * k * (dist_handle if dist_xy is None else dist_xy)
-                rew_info["dist_z"]  = -15.0 * k * abs(height_diff)
+            # ── Direct dense distance rewards ─────────────────────────────────────────
+            # In the cumulative-potential design Phi_reach == 0, so REACH receives
+            # NO shaping gradient at all. These dense terms are therefore the ONLY
+            # approach signal and must be as strong as the working v1 reward
+            # (env_gen.py), otherwise the arm stalls at mid-distance. The previous
+            # v2 had weakened them (-2 dist, no xy) on the false assumption that the
+            # potential would help here — it cannot. See §1.10.B.
+            rew_info["dist_3d"] = -5.0  * k * dist_handle
+            rew_info["dist_xy"] = -3.0  * k * (dist_xy if dist_xy is not None else dist_handle)
+            rew_info["dist_z"]  = -15.0 * k * abs(height_diff)
 
-            # Approach geometry penalties (same as v1)
+            # Approach geometry penalties
             if height_diff < -0.005:
                 rew_info["app_blw"] = -3.0 * abs(height_diff + 0.005)
-            if height_diff > 0.03 and gripper_action > 0.2:
-                rew_info["app_top"] = -5.0 * height_diff * gripper_action
+            if height_diff > 0.03:
+                # Penalise being above handle (condition was gated on gripper_action > 0.2
+                # which is NEVER true in REACH — gripper is always open/negative).
+                rew_info["app_top"] = -1.5 * height_diff
 
             # Multi-approach alignment  [§3.3, ten Pas 2017] — handled separately
             # (alignment value already max-pooled over K candidates by MultiApproachGrasp)
@@ -259,8 +292,9 @@ class PotentialBasedReward:
             rew_info["align"] = -self.cfg.w_multi_align * (1.0 - alignment) * prox_factor
             rew_info["flat"]  = -0.5 * flat_alignment * prox_factor
 
-            # Gripper Management (same logic as v1)
-            if dist_handle > 0.025:
+            # Gripper Management (physics-calibrated based on adaptive grasp threshold)
+            d_thresh = self.cfg.fsm_grasp_dist_k_radius * handle_radius + self.cfg.fsm_grasp_dist_k_offset
+            if dist_handle > d_thresh:
                 if gripper_action > -0.85:
                     rew_info["grip"] = -1.0 * (gripper_action - (-0.85))
             else:
@@ -268,7 +302,7 @@ class PotentialBasedReward:
                     norm_g = (gripper_action - (-0.85)) / (1.0 - (-0.85))
                     rew_info["grip"] = 2.5 * norm_g
 
-            # REACH→PUSH bonus
+            # REACH → PUSH bonus
             if just_grasped and not fsm_state.has_grasp_bonus:
                 # Keep a small explicit bonus for interpretability
                 rew_info["phase_trans"]   = 10.0
@@ -286,14 +320,28 @@ class PotentialBasedReward:
             rew_info["dist_3d"] = -5.0 * dist_handle
             rew_info["dist_z"]  = -15.0 * abs(height_diff)
 
-            # With potential shaping: door_prog replaced by F = γΦ_push(s') - Φ_push(s)
-            # (already added in phi_shape above)
-            # Without potential shaping: explicit door progress (same as v1)
-            if not self.cfg.use_potential_reward:
-                if fsm_state.min_door_angle is not None and gripper_action > grip_thresh:
-                    delta = fsm_state.min_door_angle - door_angle
-                    if delta > 0:
-                        rew_info["door_prog"] = 2000.0 * delta
+            # ── Real task objective: ratcheted door-progress ──────────────────────────
+            # This is the v1-proven closing signal (env_gen.py). It is the GENUINE
+            # reward R that defines "close the door"; adding Ng-shaping on top leaves
+            # its optimum unchanged [Ng et al. 1999], so it is kept ON regardless of
+            # use_potential_reward.
+            #
+            # Two bugs are fixed here vs the previous v2 (§1.10.C):
+            #   1. It was gated behind `if not use_potential_reward` → with shaping ON
+            #      (the default) the door had NO closing reward, only the tiny phi_push.
+            #   2. It read fsm_state.min_door_angle, which the FSM already lowered to
+            #      the current angle THIS step → delta was always 0. We keep our own
+            #      ratchet so delta reflects true new progress.
+            #
+            # Non-exploitable: _min_door_angle only ever decreases, so oscillating the
+            # door back and forth cannot re-earn reward.
+            if self._min_door_angle is None:
+                self._min_door_angle = door_angle
+            if gripper_action > grip_thresh:
+                delta = self._min_door_angle - door_angle
+                if delta > 0:
+                    rew_info["door_prog"]  = 2000.0 * delta
+                    self._min_door_angle   = door_angle
 
             # Lift penalty (same as v1)
             if action[2] > 0.05:

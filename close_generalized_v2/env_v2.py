@@ -35,28 +35,39 @@ from close_generalized_v2.beta_net       import BetaNetwork
 
 class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
     def __init__(self, cfg: TrainConfigV2, render_mode=None):
-        super().__init__(cfg, render_mode)
+        self._fsm            = AdaptiveFSM(cfg)          # provides .state.phase / .state.one_hot
+        self._grasp_strategy = MultiApproachGrasp(cfg)   # provides .obs_features() → zeros
+
+        # Minimal domain-rand stub so _flatten_obs() is safe before the real instance is ready.
+        # Values match the MuJoCo XML defaults (same as domain_rand_v2.py base values).
+        from types import SimpleNamespace
+        self._domain_rand = SimpleNamespace(
+            current_handle_radius   = 0.021,
+            current_handle_friction = 0.8,
+            obs_features            = lambda: np.zeros(3, dtype=np.float32),
+        )
 
         self.curriculum_level = 0.0
 
-        # ── Identify base MuJoCo elements (same as v1) ────────────────────────
+        # ── Call parent __init__ (will call _flatten_obs once) ────────────────
+        super().__init__(cfg, render_mode)
+
+        # ── Replace stubs with fully-initialised real instances ───────────────
         self.door_body_id = self._rs_env.sim.model.body_name2id("Door_main")
         self.base_pos     = self._rs_env.sim.model.body_pos[self.door_body_id].copy()
         self.base_quat    = self._rs_env.sim.model.body_quat[self.door_body_id].copy()
 
-        # ── Adaptive FSM ─────────────────────────────────────────────────
+        # FSM was already created as a full instance above (no need to re-create)
         # Ref: Konidaris & Barto (2009), Sutton et al. (1999)
-        self._fsm = AdaptiveFSM(cfg)
 
         # ── §3.2 Potential-Based Reward ───────────────────────────────────────
         # Ref: Ng, Russell & Harada (1999), Devlin & Kudenko (2012)
         self._reward_fn = PotentialBasedReward(cfg, gamma=cfg.gamma)
 
-        # ── §3.3 Multi-Approach Grasp ─────────────────────────────────────────
+        # ── §3.3 Multi-Approach Grasp (already a real instance) ───────────────
         # Ref: ten Pas et al. (2017), ManipForce (2015)
-        self._grasp_strategy = MultiApproachGrasp(cfg)
 
-        # ── §3.4 Extended Domain Randomizer ──────────────────────────────────
+        # ── §3.4 Extended Domain Randomizer (real instance replaces stub) ─────
         # Ref: Tobin et al. (2017), Zhao et al. (2020)
         self._domain_rand = ExtendedDomainRandomizer(cfg, self._rs_env.sim.model)
 
@@ -79,13 +90,25 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
     def _grasp_phase(self) -> bool:
         return self._fsm.state.phase == PHASE_PUSH
 
+    @_grasp_phase.setter
+    def _grasp_phase(self, _value) -> None:  # no-op: FSM state is authoritative
+        pass
+
     @property
     def _success_latched(self) -> bool:
         return self._fsm.state.phase in (PHASE_HOLD, PHASE_RETREAT)
 
+    @_success_latched.setter
+    def _success_latched(self, _value) -> None:  # no-op: FSM state is authoritative
+        pass
+
     @property
     def _ready_to_retreat(self) -> bool:
         return self._fsm.state.phase == PHASE_RETREAT
+
+    @_ready_to_retreat.setter
+    def _ready_to_retreat(self, _value) -> None:  # no-op: FSM state is authoritative
+        pass
 
     # ── Observation ────────────────────────────────────────────────────────────
     def _flatten_obs(self, obs: dict) -> np.ndarray:
@@ -104,7 +127,14 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         # ── §3.3 Multi-approach grasp features ────────────────────────────────
         # Ref: ten Pas et al. (2017)
         eef_quat         = obs.get("robot0_eef_quat")
-        door_quat_mujoco = self._rs_env.sim.model.body_quat[self.door_body_id]
+
+        # door_body_id is not yet set during the super().__init__() call — fall back
+        # to identity quaternion [w = 1, x = 0, y = 0, z = 0] so grasp_feats are all-zeros.
+        _body_id         = getattr(self, "door_body_id", None)
+        if _body_id is not None:
+            door_quat_mujoco = self._rs_env.sim.model.body_quat[_body_id]
+        else:
+            door_quat_mujoco = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
         grasp_feats      = self._grasp_strategy.obs_features(
             eef_quat, handle_pos, eef_pos, door_quat_mujoco
         )  # [4 dim]
@@ -383,7 +413,7 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
     def _print_diag(
         self, dist, dz, grip, phys, width, align, door, latch, reward, rew_info
     ) -> None:
-        s = self._fsm.state
+        s         = self._fsm.state
         phase_str = f"{s.phase}:{s.phase_name}"
         phys_str  = "PHYS_OK" if phys else "PHYS_OPEN"
         print(f"┌─────────┬────────┬────────┬───────┬───────────┬───────┬───────┬───────┬───────┐")

@@ -98,14 +98,23 @@ class ExtendedDomainRandomizer:
             self.base_door_pos  = sim_model.body_pos[self.door_body_id].copy()
             self.base_door_quat = sim_model.body_quat[self.door_body_id].copy()
 
-        # Latch joint stiffness
+        # ── Resolve DOF addresses ─────────────────────────────────────────────
+        self.latch_dof_adr: Optional[int] = (
+            int(sim_model.jnt_dofadr[self.latch_joint_id]) if self.latch_joint_id is not None else None
+        )
+        self.hinge_dof_adr: Optional[int] = (
+            int(sim_model.jnt_dofadr[self.hinge_joint_id]) if self.hinge_joint_id is not None else None
+        )
+
+        # Latch joint stiffness (jnt_stiffness IS per-joint -> joint id is correct)
         if self.latch_joint_id is not None:
             self.base_latch_stiffness = float(sim_model.jnt_stiffness[self.latch_joint_id])
-            self.base_latch_damping   = float(sim_model.dof_damping[self.latch_joint_id])
+            if self.latch_dof_adr is not None:
+                self.base_latch_damping = float(sim_model.dof_damping[self.latch_dof_adr])
 
-        # Hinge joint damping
-        if self.hinge_joint_id is not None:
-            self.base_hinge_damping = float(sim_model.dof_damping[self.hinge_joint_id])
+        # Hinge joint damping (per-DOF index)
+        if self.hinge_dof_adr is not None:
+            self.base_hinge_damping = float(sim_model.dof_damping[self.hinge_dof_adr])
 
         # Door body mass
         if self.door_body_id is not None:
@@ -224,7 +233,7 @@ class ExtendedDomainRandomizer:
 
         Ref: Tobin et al. (2017); Zhao et al. (2020) §3.4.
         """
-        if not self.cfg.rand_hinge_damping or self.hinge_joint_id is None:
+        if not self.cfg.rand_hinge_damping or self.hinge_dof_adr is None:
             return
 
         base  = self.base_hinge_damping or 0.1
@@ -233,7 +242,7 @@ class ExtendedDomainRandomizer:
             self.cfg.rand_hinge_damping_max,
         )
         new_damp = base * scale
-        self.model.dof_damping[self.hinge_joint_id] = new_damp
+        self.model.dof_damping[self.hinge_dof_adr] = new_damp   # per-DOF, not per-joint
         self.current_hinge_damping = float(new_damp)
 
     def _randomize_door_mass(self) -> None:

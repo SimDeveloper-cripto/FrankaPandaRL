@@ -46,6 +46,7 @@ PHASE_NAMES = {0: "REACH", 1: "PUSH", 2: "HOLD", 3: "RETREAT"}
 class FSMState:
     phase                : int   = PHASE_REACH
     grasp_confirm_count  : int   = 0
+    grasp_lose_count     : int   = 0
     hold_closed_duration : int   = 0
     return_hold          : int   = 0
     min_door_angle       : Optional[float]      = None
@@ -64,6 +65,7 @@ class FSMState:
     def reset(self) -> None:
         self.phase                = PHASE_REACH
         self.grasp_confirm_count  = 0
+        self.grasp_lose_count     = 0
         self.hold_closed_duration = 0
         self.return_hold          = 0
         self.min_door_angle       = None
@@ -348,17 +350,36 @@ class AdaptiveFSM:
             if near_latch:
                 effective_lose_tol = 0.10
 
-            grip_lost = gripper_action < g_thresh
-            if not near_latch:
-                grip_lost = grip_lost or not is_physically_closed
-            dist_lost = dist_handle > effective_lose_tol
+            # PUSH → REACH (grasp lost) — Schmitt trigger + hysteresis (§1.11)
+            # The chatter at 400k (grasp_rate ~14/ep) came from dropping the grasp on
+            # a SINGLE sub-threshold gripper frame. Fix: (a) release at a LOWER grip
+            # threshold than the one required to enter PUSH (Schmitt), and (b) require
+            # fsm_grasp_lose_steps consecutive bad frames before declaring loss. This
+            # absorbs the gripper noise without weakening the genuine-loss detection.
+            door_speed         = abs(prev_angle - door_angle) * control_freq
+            effective_lose_tol = float(np.clip(0.05 + door_speed * 0.5, 0.05, 0.12))
+            near_latch         = door_angle < 0.05
+            if near_latch:
+                effective_lose_tol = 0.10
 
-            if grip_lost or dist_lost:
+            release_thresh = g_thresh - self.cfg.fsm_grip_release_margin
+            grip_bad = gripper_action < release_thresh
+            if not near_latch:
+                grip_bad = grip_bad or not is_physically_closed
+            dist_bad = dist_handle > effective_lose_tol
+
+            if grip_bad or dist_bad:
+                s.grasp_lose_count += 1
+            else:
+                s.grasp_lose_count = 0
+
+            if s.grasp_lose_count >= self.cfg.fsm_grasp_lose_steps:
                 s.phase               = PHASE_REACH
                 s.grasp_confirm_count = 0
+                s.grasp_lose_count    = 0
                 s.push_steps          = 0
                 events["grasp_lost"]  = True
-                reason = f"dist={dist_handle:.3f}" if dist_lost else f"grip={gripper_action:.2f}"
+                reason = f"dist={dist_handle:.3f}" if dist_bad else f"grip={gripper_action:.2f}"
                 s.events.append(f"PUSH→REACH ({reason})")
 
         # ══════════════════════════════════════════════════════════════════════

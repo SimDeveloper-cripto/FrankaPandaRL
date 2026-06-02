@@ -258,3 +258,15 @@ class GoalDoorEnv(gym.Env):
             info.update({f"rs_{k}": v for k, v in rs_info.items()})
 
         return self._flatten_obs(obs, goal_norm=self._goal_norm()), reward, terminated, truncated, info
+
+    def render(self):
+        if self.render_mode == "human":
+            try:
+                self._rs_env.viewer.set_camera(camera_id=-1)
+            except Exception as e:
+                pass
+            return self._rs_env.render()
+        return None
+
+    def close(self):
+        self._rs_env.close()

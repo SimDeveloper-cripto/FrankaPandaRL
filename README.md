@@ -46,9 +46,6 @@ Coming soon !!
 
 ## Generalization of the Generalized Door Closing Task with Robosuite 1.5.1
 
-> **Advanced v2** — FSM adattiva, reward potential-based, grasp multi-approccio,
-> randomizzazione fisica estesa. Vedi `close_generalized_v2/README.md`.
-
 ```bash
 # macOS — same .venv of close_generalized
 
@@ -77,8 +74,35 @@ mjpython close_generalized_v2/train_gen_v2.py --play --model runs/close_gen_v2/b
 
 Coming soon !!
 
-## Genralization of the Generalized Door Opening Task with Robosuite 1.5.1
+## Generalized Door Opening Task with Robosuite 1.5.1
 
+```bash
+# macOS — same .venv of close_generalized
+
+# Training from scratch
+./.venv/bin/python open_generalized/train_curriculum.py
+
+# Play with Current best model (viewer MuJoCo)
+mjpython open_generalized/train_curriculum.py --play
+
+# Play with specific model
+mjpython open_generalized/train_curriculum.py --play --model runs/open_gen/best_model.zip
+
+# Resume training
+./.venv/bin/python open_generalized/train_curriculum.py --resume
+
+# Resume from specific checkpoint
+./.venv/bin/python open_generalized/train_curriculum.py  \
+    --resume-model runs/open_gen/best_model.zip          \
+    --resume-vecnorm runs/open_gen/vecnormalize.pkl
+
+# Add more steps to an already started training
+./.venv/bin/python open_generalized/train_curriculum.py --resume --total-steps <new_steps_to_add>
+```
+
+### TODO
+
+- [ ] Generalize this Generalized Task
 
 ### Results
 
