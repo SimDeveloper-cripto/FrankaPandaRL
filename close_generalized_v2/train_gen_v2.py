@@ -69,6 +69,13 @@ class GraspDiagnosticCallbackV2(BaseCallback):
             self.logger.record("custom/retreat_rate", rr)
             self.logger.record("custom/episodes",     self.episodes)
 
+            # Log the curriculum level so it is never lost (SB3 table + TensorBoard).
+            try:
+                lvl = self.training_env.get_attr("curriculum_level")[0]
+                self.logger.record("custom/curriculum_level", float(lvl))
+            except Exception:
+                pass
+
             self.grasps       = 0
             self.retreats     = 0
             self.episodes     = 0
@@ -96,20 +103,42 @@ class AdaptiveCurriculumV2(BaseCallback):
             gr = self.grasp_cb.grasps      / max(1, self.grasp_cb.episodes)
 
             current_level = self.training_env.get_attr("curriculum_level")[0]
-            efficiency_ok = True
 
-            if sr > 0.85 and gr > 0.50 and efficiency_ok and current_level < 1.0:
-                new_level = min(1.0, current_level + self.cfg.curriculum_advance_delta)
-                self.training_env.env_method("set_curriculum_level", new_level)
+            # §1.12 — Curriculum gate driven by SUCCESS, not grasp count, and measured
+            # over a WINDOW (not cumulatively).
+            #
+            # Two problems with the previous gate:
+            #   1. It required grasp_rate > 0.50. After the §1.11 anti-chatter fix a
+            #      perfect episode does exactly ONE REACH→PUSH, so grasp_rate ≈ 1.0 but
+            #      dips noisily below 0.50 over a log window → froze the curriculum.
+            #   2. sr was CUMULATIVE since the start of training. The long low-success
+            #      warm-up (≈0 until ~340k) permanently diluted the average below 0.85,
+            #      so even at 98% recent success the cumulative sr never crossed the bar.
+            #
+            # Fix: gate on success_rate, keep grasp_rate only as a LOW anti-collapse
+            # floor, and RESET both counters at EVERY check so sr/gr reflect only the
+            # most recent window of episodes (recent competence is what should gate
+            # advancement — Bengio 2009; Narvekar 2020 §2.6).
+            advanced = False
+            if sr >= self.cfg.curriculum_success_thresh and current_level < 1.0:
+                if gr >= self.cfg.curriculum_grasp_floor:
+                    new_level = min(1.0, current_level + self.cfg.curriculum_advance_delta)
+                    self.training_env.env_method("set_curriculum_level", new_level)
+                    advanced = True
+                    print(f"\n[CURRICULUM v2] Level Up → {new_level:.2f}  "
+                          f"(success={sr:.2f}, grasp={gr:.2f})")
+                else:
+                    print(f"\n[CURRICULUM v2] Hold: success={sr:.2f} ok but "
+                          f"grasp_rate={gr:.2f} < floor {self.cfg.curriculum_grasp_floor:.2f} "
+                          f"(possible grasp collapse — not advancing)")
 
-                self.success_cb.successes = 0
-                self.success_cb.episodes  = 0
-                print(f"\n[CURRICULUM v2] Level Up → {new_level:.2f}  "
-                      f"(success={sr:.2f}, grasp={gr:.2f})")
-
-            elif sr > 0.85 and gr <= 0.50:
-                print(f"\n[CURRICULUM v2] Blocked: success={sr:.2f} ok "
-                      f"but grasp_rate={gr:.2f} < 0.50")
+            # Windowed metric: clear counters every check (whether or not we advanced)
+            # so the next window is measured fresh and early-training failures cannot
+            # dilute future checks.
+            self.success_cb.successes = 0
+            self.success_cb.episodes  = 0
+            self.grasp_cb.grasps      = 0
+            self.grasp_cb.episodes    = 0
 
         return True
 
@@ -150,6 +179,15 @@ class CustomEvalCallbackV2(BaseCallback):
                 self.eval_env.obs_rms = self.model.get_vec_normalize_env().obs_rms
                 if hasattr(self.model.get_vec_normalize_env(), "ret_rms"):
                     self.eval_env.ret_rms = self.model.get_vec_normalize_env().ret_rms
+
+            # §1.12 — evaluate at the SAME curriculum level the policy trains on, so
+            # eval/success_rate reflects robustness to the randomized poses being
+            # learned (otherwise eval stays at level 0 = fixed pose, over-optimistic).
+            try:
+                train_level = self.training_env.get_attr("curriculum_level")[0]
+                self.eval_env.env_method("set_curriculum_level", train_level)
+            except Exception:
+                pass
 
             mean_reward, mean_length, mean_success = self._evaluate()
 

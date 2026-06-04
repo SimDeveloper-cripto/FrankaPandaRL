@@ -30,7 +30,7 @@ class TrainConfigV2:
     vecnormalize: bool = True
 
     # ── SAC Hyperparameters ────────────────────────────────────────────────────
-    total_steps    : int   = 500_000 # 1_500_000
+    total_steps    : int   = 800_000
     learning_rate  : float = 3e-4
     buffer_size    : int   = 1_000_000
     batch_size     : int   = 256
@@ -69,7 +69,19 @@ class TrainConfigV2:
     w_delta      : float = 2.0
     w_action     : float = 0.0
     time_penalty : float = 0.1   # was 0.5 — reduced: -0.50/step (-300/ep) drowned shaping signal
-    success_bonus: float = 5.0
+    success_bonus: float = 100.0  # §1.14 — one-time bonus al completamento del task.
+    # Dimensionato per preservare il valore dello stato di retreat-completo: con γ=0.95
+    # il valore SCONTATO del "mungere" la reward di RETREAT (~+3/step) è ≈ 3/(1−γ) ≈ 60,
+    # NON +2000 (quello è il ritorno NON scontato su 400 step). Un bonus ≳ 60 rende
+    # "termina" preferibile a "continua", senza cliff destabilizzanti.
+
+    # §1.14 — Terminazione al completamento del RETREAT.
+    # Senza stato terminale, l'episodio gira fino all'orizzonte (ep_len=500) e la policy
+    # continua a muovere il braccio per raccogliere ret_dir/ret_grip. Terminare quando il
+    # retreat è sostenuto + porta chiusa + latch neutro risolve durata episodio E
+    # movimento residuo del braccio.
+    terminate_on_retreat_complete: bool = True
+    fsm_retreat_target_steps     : int  = 30   # step sostenuti in RETREAT prima di terminare
 
     # ── Return Stage ──────────────────────────────────────────────────────────
     enable_return_stage: bool  = True
@@ -216,7 +228,13 @@ class TrainConfigV2:
     curriculum_max_reach_steps: int = 25
     curriculum_max_push_steps : int = 25
     curriculum_check_freq     : int = 25_000
-    curriculum_advance_delta  : float = 0.05
+    curriculum_advance_delta  : float = 0.10
+
+    # §1.12 — Curriculum gate (success-driven, windowed). See AdaptiveCurriculumV2.
+    # Advance when RECENT success is reliable; grasp_floor is a low anti-collapse guard,
+    # NOT a performance bar (post-§1.11 a perfect episode does ~1 grasp).
+    curriculum_success_thresh : float = 0.85
+    curriculum_grasp_floor    : float = 0.20
 
     # ── Diagnostic ────────────────────────────────────────────────────────────
     debug_print_every: int = 200  # :)

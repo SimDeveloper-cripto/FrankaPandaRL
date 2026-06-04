@@ -458,6 +458,19 @@ class PotentialBasedReward:
             # Door stability monitor in retreat
             rew_info["hold"] = 1.0 - abs(door_qpos) if abs(door_qpos) < 0.03 else 0.0
 
+            # §1.14 — Stato TERMINALE al completamento del task.
+            # Quando il RETREAT è sostenuto (la porta è rimasta chiusa abbastanza a lungo)
+            # e la porta è chiusa e il latch è neutro, il task È finito: terminare qui
+            # (1) accorcia l'episodio (~step 120 invece di 500) e (2) toglie sia
+            # l'incentivo sia l'occasione di continuare a muovere il braccio per
+            # raccogliere ret_dir/ret_grip. Bonus una tantum a preservare il valore.
+            if (self.cfg.terminate_on_retreat_complete
+                    and fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps
+                    and abs(door_qpos)  < 0.03
+                    and abs(latch_qpos) < 0.08):
+                rew_info["success_bonus"] = self.cfg.success_bonus
+                terminated = True
+
         # ── Total reward ──────────────────────────────────────────────────────
         reward = float(sum(rew_info.values()))
 
