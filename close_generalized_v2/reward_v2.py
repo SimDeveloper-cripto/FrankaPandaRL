@@ -435,8 +435,14 @@ class PotentialBasedReward:
                 if action[2] < 0:
                     rew_info["ret_down"] = -5.0 * abs(action[2])
 
-            # Directional reward toward retreat target  [v1: same structure]
-            if dist_to_target > 0.02:
+            # Directional reward toward retreat target, poi SETTLE (immobilizza + rilascia).
+            # §1.15 — la zona di settle è allargata (fsm_retreat_settle_dist) rispetto al
+            # vecchio freeze a 0.02 m, che non veniva quasi mai raggiunto → il braccio
+            # continuava a inseguire il target via ret_dir e non si fermava mai. Ora, appena
+            # vicino alla posa di retreat, il braccio si FERMA (penalità su tutte le DOF
+            # tranne il gripper) e riceve un bonus di rilascio solo a porta chiusa + gripper
+            # aperto. La terminazione §1.14 resta invariata → la len d'episodio non cambia.
+            if dist_to_target > self.cfg.fsm_retreat_settle_dist:
                 dir_to_target    = fsm_state.retreat_pos - eef_pos
                 dir_norm         = dir_to_target / (dist_to_target + 1e-6)
                 action_alignment = float(np.dot(action[:3], dir_norm))
@@ -445,7 +451,14 @@ class PotentialBasedReward:
                 perp                 = action[:3] - action_alignment * dir_norm
                 rew_info["ret_perp"] = -2.0 * float(np.linalg.norm(perp))
             else:
-                rew_info["ret_freeze"] = -20.0 * float(np.linalg.norm(action[:-1]))
+                # SETTLE: immobilizza il braccio (tutte le DOF tranne il gripper).
+                rew_info["ret_freeze"] = -self.cfg.w_retreat_settle * float(
+                    np.linalg.norm(action[:-1])
+                )
+                # Rilascio pulito: bonus SOLO a porta chiusa + gripper aperto, così non
+                # c'è incentivo ad "accamparsi" immobile a porta ancora aperta.
+                if abs(door_qpos) < 0.03 and gripper_action < -0.85:
+                    rew_info["ret_release"] = 1.0
 
             # Progressive joint freeze  [v1: same]
             if joint_vel is not None:

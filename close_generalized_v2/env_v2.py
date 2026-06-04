@@ -47,7 +47,11 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
             obs_features            = lambda: np.zeros(3, dtype=np.float32),
         )
 
-        self.curriculum_level = 0.0
+        self.curriculum_level = (
+            cfg.fixed_curriculum_level
+            if getattr(cfg, "fixed_curriculum_level", None) is not None
+            else 0.0
+        )
 
         # ── Call parent __init__ (will call _flatten_obs once) ────────────────
         super().__init__(cfg, render_mode)
@@ -358,6 +362,11 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
     # ── Reset ─────────────────────────────────────────────────────────────────
 
     def reset(self, seed: int = None, options: dict = None):
+        # §1.15 — Se il livello di curriculum è fissato, lo ri-ancoriamo a ogni reset
+        # così nessun callback può farlo driftare (training a posa fissa o variabile).
+        if getattr(self.cfg, "fixed_curriculum_level", None) is not None:
+            self.curriculum_level = float(np.clip(self.cfg.fixed_curriculum_level, 0.0, 1.0))
+
         # ── §3.4 Extended domain randomization ───────────────────────────────
         # Ref: Tobin et al. (2017), Zhao et al. (2020)
         self._domain_rand.randomize_episode(self.curriculum_level)

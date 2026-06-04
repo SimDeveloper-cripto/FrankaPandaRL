@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 @dataclass
@@ -30,7 +30,7 @@ class TrainConfigV2:
     vecnormalize: bool = True
 
     # ── SAC Hyperparameters ────────────────────────────────────────────────────
-    total_steps    : int   = 800_000
+    total_steps    : int   = 800_000 # 1_500_000
     learning_rate  : float = 3e-4
     buffer_size    : int   = 1_000_000
     batch_size     : int   = 256
@@ -82,6 +82,25 @@ class TrainConfigV2:
     # movimento residuo del braccio.
     terminate_on_retreat_complete: bool = True
     fsm_retreat_target_steps     : int  = 30   # step sostenuti in RETREAT prima di terminare
+
+    # §1.15 — RETREAT: immobilizzazione del braccio + rilascio pulito della maniglia.
+    # La zona di "settle" è allargata rispetto al vecchio freeze a 0.02 m (soglia quasi
+    # mai raggiunta → il braccio continuava a inseguire il target via ret_dir). Appena
+    # entro `fsm_retreat_settle_dist` dalla posa di retreat, il braccio si FERMA
+    # (penalità su tutte le DOF tranne il gripper) e riceve un bonus di rilascio solo a
+    # porta chiusa + gripper aperto. La terminazione §1.14 resta invariata, quindi la
+    # lunghezza d'episodio NON cambia.
+    fsm_retreat_settle_dist: float = 0.06   # [m] entro cui immobilizzare invece di inseguire
+    w_retreat_settle       : float = 20.0   # forza dell'immobilizzazione (= vecchio freeze)
+
+    # §1.15 — Pinning del livello di curriculum (due modalità di training senza toccare
+    # il codice esistente):
+    #   None  → curriculum ADATTIVO 0→1 (comportamento attuale, via AdaptiveCurriculumV2)
+    #   0.0   → POSA FISSA (riproduce il run attuale): nessuna randomizzazione di posa,
+    #           fisica sempre randomizzata. Curriculum adattivo disattivato.
+    #   1.0   → POSA VARIABILE piena dall'inizio (pos ±15 cm, yaw ±17°).
+    # L'env ri-fissa il livello a ogni reset, quindi non può driftare.
+    fixed_curriculum_level: Optional[float] = None
 
     # ── Return Stage ──────────────────────────────────────────────────────────
     enable_return_stage: bool  = True

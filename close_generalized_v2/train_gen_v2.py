@@ -3,6 +3,9 @@
 #
 # Training entry-point for AdvancedGeneralizedDoorEnv (v2)
 
+# rename runs/... folder into runs/close_gen_v2 --> fixed_pose     (800_000 steps)
+# rename runs/... folder into runs/close_gen_v2 --> non-fixed pose (1_500_000 steps)
+
 import numpy as np
 import os, sys, time, argparse
 
@@ -280,6 +283,11 @@ def main():
     parser.add_argument("--total-steps",    type = int, default = None)
 
     parser.add_argument("--beta-net", action = "store_true", help = "Enable beta-network (§3.5) — Phase 4")
+    parser.add_argument(
+        "--curriculum", type = float, default = None,
+        help = "Fissa il livello di curriculum: 0=posa fissa, 1=posa variabile piena. "
+               "Se omesso → curriculum adattivo 0→1.",
+    )
     args = parser.parse_args()
 
     cfg = TrainConfigV2(run_dir = "runs/close_gen_v2", num_envs = 8, horizon = 500)
@@ -291,10 +299,23 @@ def main():
     if args.total_steps is not None:
         cfg.total_steps = args.total_steps
 
+    # §1.15 — Modalità di training a curriculum fissato (posa fissa / variabile).
+    if args.curriculum is not None:
+        cfg.fixed_curriculum_level = float(args.curriculum)
+        mode = "POSA FISSA" if cfg.fixed_curriculum_level == 0.0 else \
+               "POSA VARIABILE" if cfg.fixed_curriculum_level == 1.0 else \
+               f"livello {cfg.fixed_curriculum_level:.2f}"
+        print(f"[CURRICULUM v2] Livello FISSATO a {cfg.fixed_curriculum_level:.2f} "
+              f"({mode}) — curriculum adattivo disattivato.")
+
     # ── Play mode ─────────────────────────────────────────────────────────────
     if args.play:
         raw_env = AdvancedGeneralizedDoorEnv(cfg, render_mode="human")
-        raw_env.set_curriculum_level(1.0)
+        # §1.15 — il play mostra il livello scelto: --curriculum 0 = posa fissa,
+        # --curriculum 1 = posa variabile. Senza flag: posa variabile (1.0) come prima.
+        play_level = args.curriculum if args.curriculum is not None else 1.0
+        raw_env.set_curriculum_level(play_level)
+        print(f"[PLAY v2] curriculum_level = {play_level:.2f}")
 
         vn_path = os.path.join(os.path.dirname(args.model), "vecnormalize.pkl")
         obs_rms = None
@@ -410,9 +431,20 @@ def main():
             )
 
         print(f"[v2] Training for {cfg.total_steps:,} steps → {cfg.run_dir}")
+
+        # §1.15 — Assembla i callback. La curriculum ADATTIVA gira solo se il livello
+        # NON è fissato; se è fissato, ancoriamo subito tutti gli env di training al
+        # livello scelto (la reset() lo ri-fissa comunque a ogni episodio).
+        callbacks = [scb, gcb]
+        if cfg.fixed_curriculum_level is None:
+            callbacks.append(ccb)
+        else:
+            env.env_method("set_curriculum_level", float(cfg.fixed_curriculum_level))
+        callbacks.append(eval_cb)
+
         model.learn(
             total_timesteps     = cfg.total_steps,
-            callback            = [scb, gcb, ccb, eval_cb],
+            callback            = callbacks,
             reset_num_timesteps = (load_model_path is None),
         )
         model.save(os.path.join(cfg.run_dir, "best_model"))
