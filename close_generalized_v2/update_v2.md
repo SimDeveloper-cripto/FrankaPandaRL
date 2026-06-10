@@ -1543,6 +1543,7 @@ introduce nuovi ottimi.
 | Pinning del livello (posa fissa/variabile, §1.15) | `config_v2.py`, `env_v2.py`, `train_gen_v2.py` | scheduling del curriculum `[20]` |
 | Grasp multi-approccio (K candidati, max-align) | `grasp_strategy.py` | ten Pas `[15]`, Handa `[14]` |
 | `is_physically_closed` come trigger di contatto | `env_v2.py`, `fsm_v2.py` | force-based primitives `[13]` |
+| Reward di mantenimento contatto in PUSH (`grip_contact`, §1.16) | `reward_v2.py`, `config_v2.py` | reward genuino `R` `[3]`; qualità/contatto della presa `[15]`, `[13]` |
 | Goal-conditioning / HER (estensioni future) | — | Schaul `[6]`, Andrychowicz `[7]` |
 | Simulatore, ambiente, libreria RL | tutto il pacchetto | MuJoCo `[21]`, robosuite `[22]`, Stable-Baselines3 `[23]` |
 
@@ -1580,3 +1581,65 @@ introduce nuovi ottimi.
 22. Y. Zhu, J. Wong, A. Mandlekar, R. Martín-Martín, A. Joshi, S. Nasiriany, Y. Zhu (2020). *robosuite: A Modular Simulation Framework and Benchmark for Robot Learning.* arXiv:2009.12293.
 23. A. Raffin, A. Hill, A. Gleave, A. Kanervisto, M. Ernestus, N. Dormann (2021). *Stable-Baselines3: Reliable Reinforcement Learning Implementations.* JMLR, 22(268): 1–8.
 24. G. Brockman, V. Cheung, L. Pettersson, J. Schneider, J. Schulman, J. Tang, W. Zaremba (2016). *OpenAI Gym.* arXiv:1606.01540. — Successore mantenuto: M. Towers et al. (2023), *Gymnasium*, software framework.
+
+
+---
+
+## 12. §1.16 — Grip in Chiusura: Reward di Mantenimento del Contatto
+
+> Rifinitura comportamentale (qualità del moto, **non** del successo) introdotta dopo il
+> raggiungimento del 100% in entrambe le modalità di posa (§1.15). Obiettivo: una presa
+> più salda **durante la chiusura**, riducendo lo slittamento osservato nei play.
+
+**Motivazione (osservazione).** A successo invariato, durante PUSH/HOLD la presa può
+allentarsi sulla maniglia mentre la porta ruota lungo l'arco (residuo geometrico §3.1):
+si manifesta come eventi `hold_slip` e transizioni `PUSH→REACH (grip=…)`.
+
+**Sottigliezza fisica — perché NON «stringere di più».** Il criterio `is_physically_closed`
+è vero quando `gripper_width` è nella *banda* di buona presa `[0.015, handle_diam + 0.025]`.
+Su maniglie sottili, comandare più presa (`gripper_action → +1`) fa scendere `gripper_width`
+**sotto** `0.015` → contatto dichiarato perso. Un reward che spingesse il gripper al massimo
+sarebbe quindi controproducente: l'obiettivo corretto è **restare nella banda di contatto**,
+non chiudere di più.
+
+**Intervento (`reward_v2.py`, blocco PUSH).** Un unico termine positivo e limitato che
+premia il *mantenimento del contatto* scalato sul progresso di chiusura:
+
+```python
+if is_physically_closed and door_max > 1e-6:
+    closing_progress = float(np.clip(1.0 - door_angle / door_max, 0.0, 1.0))
+    rew_info["grip_contact"] = self.cfg.w_grip_contact * closing_progress   # w = 0.5
+```
+
+`config_v2.py`: nuovo peso `w_grip_contact = 0.5`.
+
+**Perché è §1.13-safe (verifica del valore atteso di fase).**
+- **Positivo e limitato** (≤ `w_grip_contact`): non crea una «valle» negativa attorno a
+  PUSH, quindi non genera l'attrattore di accampamento del §1.13.
+- **Scalato sul progresso** (`closing_progress ≈ 0` a porta aperta): tenere ferma una porta
+  *aperta* paga ~0 → nessun nuovo incentivo ad accamparsi tenendo la maniglia senza chiudere.
+  Il segnale cresce solo mentre/dopo la chiusura, dove PUSH→HOLD scatta subito
+  (`door_angle ≤ success_angle`), quindi non è «mungibile».
+- **Vive in `R`, non nello shaping `Φ`**: l'invarianza di policy di Ng et al. (1999) `[3]`
+  resta intatta; `grip_contact` è parte del reward genuino del task (premia lo stato di
+  contatto desiderato), non un potenziale.
+- **Indipendente dal `curriculum_level`** (nessun fattore `1 + k·level`): effetto **identico**
+  a posa fissa (`--curriculum 0`) e variabile (`--curriculum 1`).
+
+**Comando di validazione (un run per modalità).**
+
+```bash
+python -m close_generalized_v2.train_gen_v2 --curriculum 0 --total-steps 800000
+python -m close_generalized_v2.train_gen_v2 --curriculum 1 --total-steps 1500000
+```
+
+**Segnali attesi nei log (conferma positiva).** Compare `grip_contact: +…` nelle frame di
+PUSH; `success_rate` resta 100% in entrambe le modalità; `ep_len` ed `ent_coef` stabili;
+**meno** eventi `hold_slip` e `PUSH→REACH (grip=…)` (la presa resta agganciata durante la
+chiusura). Se lo slittamento persistesse, la leva successiva è rinforzare il contatto anche
+in HOLD oppure stringere la banda geometrica di `is_physically_closed`.
+
+**Mappatura teorica.** Premia lo *stato* di contatto della presa: collegato a
+`is_physically_closed` come trigger di contatto (force-based primitives `[13]`) e alla nozione
+di qualità della presa (ten Pas `[15]`); resta nel reward genuino `R`, quindi compatibile con
+l'invarianza di Ng `[3]`.

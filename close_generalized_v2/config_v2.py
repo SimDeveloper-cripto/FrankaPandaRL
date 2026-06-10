@@ -93,6 +93,13 @@ class TrainConfigV2:
     fsm_retreat_settle_dist: float = 0.06   # [m] entro cui immobilizzare invece di inseguire
     w_retreat_settle       : float = 20.0   # forza dell'immobilizzazione (= vecchio freeze)
 
+    # §1.16 — GRIP IN CHIUSURA: peso del reward (positivo, limitato) per il mantenimento
+    # del contatto fisico durante PUSH, scalato sul progresso di chiusura. Premia lo STATO
+    # di buona presa (gripper_width nella banda is_physically_closed), non lo stringere di
+    # più (su maniglie sottili stringere oltre perde il contatto, §3.1). Bounded e
+    # non-negativo ⇒ §1.13-safe; nessun effetto a porta aperta (closing_progress≈0).
+    w_grip_contact         : float = 0.5
+
     # §1.15 — Pinning del livello di curriculum (due modalità di training senza toccare
     # il codice esistente):
     #   None  → curriculum ADATTIVO 0→1 (comportamento attuale, via AdaptiveCurriculumV2)

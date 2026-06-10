@@ -364,6 +364,22 @@ class PotentialBasedReward:
                 # "accamparsi" in REACH (vedi §1.13). Ora una presa ≥ soglia non paga nulla.
                 rew_info["grip"] = -2.0 * (grip_thresh - gripper_action)
 
+            # §1.16 — GRIP IN CHIUSURA: premia il MANTENIMENTO del contatto fisico
+            # (is_physically_closed = gripper_width nella banda di buona presa) MENTRE la
+            # porta si chiude, scalato sul progresso di chiusura. È un reward POSITIVO e
+            # limitato che premia lo STATO desiderato, NON lo "stringere di più": su
+            # maniglie sottili stringere oltre farebbe scendere gripper_width sotto la
+            # soglia di contatto e perderebbe la presa (§3.1). La scala sul progresso
+            # (closing_progress ≈ 0 a porta aperta → 1 a porta chiusa) evita un nuovo
+            # incentivo ad "accamparsi" tenendo ferma una porta aperta: tenere una porta
+            # aperta paga ~0; il segnale cresce solo mentre/dopo aver chiuso. Bounded e
+            # non-negativo ⇒ nessuna "valle" negativa (§1.13); vive in R (non nello
+            # shaping Φ) quindi l'invarianza di Ng resta intatta. Indipendente dal
+            # curriculum ⇒ effetto identico a livello 0 e 1.
+            if is_physically_closed and door_max > 1e-6:
+                closing_progress = float(np.clip(1.0 - door_angle / door_max, 0.0, 1.0))
+                rew_info["grip_contact"] = self.cfg.w_grip_contact * closing_progress
+
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 3 — HOLD: maintain door closed
         # ══════════════════════════════════════════════════════════════════════
