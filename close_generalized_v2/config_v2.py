@@ -116,6 +116,30 @@ class TrainConfigV2:
     return_hold_steps  : int   = 10
     return_pos_tol     : float = 0.05
 
+    # §1.17 — RILASCIO PULITO nel RETREAT (env-level, DETERMINISTICO, zero reward).
+    # Prima di allontanarsi, l'env forza il gripper aperto e CONGELA il braccio finché le
+    # dita non hanno superato la maniglia (gripper_width > diametro + margine): così la
+    # maniglia risale (latch → riposo) senza essere pizzicata. Nessun termine di reward ⇒
+    # nessun rischio di destabilizzare il training (a differenza dello shaping §1.17-reward
+    # che era stato ritirato). Rif.: rilascio basato sul contatto [13]; opzione a
+    # terminazione pulita [1].
+    retreat_clean_release : bool  = True   # off = comportamento §1.16 (nessun gate)
+    retreat_clear_margin  : float = 0.02   # [m] oltre il diametro maniglia per "dita libere"
+
+    # §1.18 — GRIP-LOCK in chiusura (env-level, DETERMINISTICO, zero reward).
+    # In PUSH e HOLD, se al passo precedente la presa era FISICAMENTE chiusa
+    # (is_physically_closed), l'env impedisce i comandi di APERTURA accidentali del
+    # gripper (rumore di esplorazione della policy stocastica): il comando viene
+    # clampato a >= grip_thresh(frizione) + grip_lock_margin. È DIREZIONALE: blocca
+    # solo l'apertura, NON stringe oltre quanto chiede la policy (su maniglie sottili
+    # stringere oltre farebbe scivolare le dita sotto la banda di contatto, §3.1).
+    # Nessun termine di reward ⇒ nessun rischio di destabilizzare il training (stesso
+    # pattern env-level di §1.17 e dell'hard-freeze di HOLD, entrambi validati al 100%).
+    # Rif.: validazione della presa basata sul contatto/forza [13]; soglia adattiva
+    # alla frizione come §3.1 [15].
+    grip_lock_enabled     : bool  = True   # off = comportamento §1.17 (nessun lock)
+    grip_lock_margin      : float = 0.10   # sopra grip_thresh, oltre l'isteresi Schmitt §1.11
+
     # ── Action Smoothing ──────────────────────────────────────────────────────
     action_smooth_alpha: float = 0.95  # was 0.8 — reduced jerk, making smoothness penalty less punishing
 

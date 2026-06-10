@@ -1544,6 +1544,8 @@ introduce nuovi ottimi.
 | Grasp multi-approccio (K candidati, max-align) | `grasp_strategy.py` | ten Pas `[15]`, Handa `[14]` |
 | `is_physically_closed` come trigger di contatto | `env_v2.py`, `fsm_v2.py` | force-based primitives `[13]` |
 | Reward di mantenimento contatto in PUSH (`grip_contact`, §1.16) | `reward_v2.py`, `config_v2.py` | reward genuino `R` `[3]`; qualità/contatto della presa `[15]`, `[13]` |
+| Rilascio pulito nel RETREAT (env-level, deterministico, §1.17) | `env_v2.py`, `config_v2.py` | rilascio basato sul contatto `[13]`; opzione a terminazione pulita `[1]` |
+| Grip-lock in PUSH/HOLD (env-level, deterministico, §1.18) | `env_v2.py`, `config_v2.py` | presa validata dal contatto `[13]`; soglia adattiva alla frizione `[15]` |
 | Goal-conditioning / HER (estensioni future) | — | Schaul `[6]`, Andrychowicz `[7]` |
 | Simulatore, ambiente, libreria RL | tutto il pacchetto | MuJoCo `[21]`, robosuite `[22]`, Stable-Baselines3 `[23]` |
 
@@ -1643,3 +1645,135 @@ in HOLD oppure stringere la banda geometrica di `is_physically_closed`.
 `is_physically_closed` come trigger di contatto (force-based primitives `[13]`) e alla nozione
 di qualità della presa (ten Pas `[15]`); resta nel reward genuino `R`, quindi compatibile con
 l'invarianza di Ng `[3]`.
+
+
+---
+
+## 13. §1.17 — Rilascio Pulito nel RETREAT (env-level) e la lezione del tentativo via reward
+
+> Rifinitura comportamentale: eliminare il «pizzicamento» della maniglia che risale
+> (latch → riposo) durante il ritiro. Risolta in modo **deterministico nell'environment**,
+> a **zero modifiche al reward**, dopo che il primo tentativo via reward shaping aveva
+> destabilizzato il training. Entrambi gli esiti sono documentati perché la sequenza è
+> una lezione metodologica importante per la tesi.
+
+### 13.1 — Il problema osservato
+
+Nei frame di RETREAT: gripper *comandato* aperto (`GRIP −0.97`) ma dita ancora sulla
+maniglia (`WIDTH 0.040`, `PHYS_OK`) mentre il braccio già trasla (`DIST` in crescita) →
+le dita trascinano/pizzicano la maniglia mentre il latch torna a riposo. Causa: `ret_grip`
+premiava il *comando* di apertura (non il rilascio **fisico**) e `ret_dir` premiava
+l'allontanamento nello stesso momento; la policy massimizzava entrambi insieme.
+
+### 13.2 — Primo tentativo (reward shaping) e collasso — RITIRATO
+
+L'intervento iniziale aggiungeva in RETREAT un bonus `ret_clear` per il rilascio fisico e
+scalava `ret_dir` finché la presa non era rilasciata. Esito empirico: **0% di successo**
+(da 100%), episodi a orizzonte pieno, `grasp_rate ≈ 3` (chattering), `ent_coef`
+collassato. Lettura: anche termini «innocui» e post-successo modificano i gradienti
+durante l'esplorazione iniziale; il training è ricaduto in un **ottimo degenere
+preesistente** (mungitura del termine `grip` di REACH, pagato per il *comando* di chiusura
+anche a vuoto — reward hacking, Turner et al. `[16]`). Revert immediato alla versione
+§1.16 → 100% recuperato su entrambi i curriculum. **Lezione (rafforza §1.13):** per la
+*qualità del moto* a successo già acquisito, NON usare reward shaping; usare logica
+deterministica nell'environment.
+
+### 13.3 — Soluzione adottata (env-level, deterministica, zero reward)
+
+In `env_v2.py`, nell'override di fase RETREAT (stesso pattern dell'hard-freeze di HOLD):
+
+```python
+handle_diam   = current_handle_radius * 2.0
+fingers_clear = prev_gripper_width > (handle_diam + cfg.retreat_clear_margin)   # adattivo
+
+if cfg.retreat_clean_release and not fingers_clear:
+    action[:-1] = 0.0    # congela il braccio
+    action[-1]  = -1.0   # gripper completamente aperto → rilascio pulito
+else:
+    ...                  # ritiro esistente (invariato)
+```
+
+`config_v2.py`: `retreat_clean_release = True` (interruttore), `retreat_clear_margin = 0.02` [m].
+
+Proprietà: (i) attivo **solo in RETREAT**, a porta già chiusa → non può ridurre il
+successo; (ii) **zero reward** → nessun nuovo ottimo; (iii) soglia **adattiva** al
+diametro maniglia (coerente con la generalizzazione §3.1) e **indipendente dal
+curriculum**; (iv) il braccio riparte solo a rilascio fisico avvenuto: la maniglia
+risale libera. Riferimenti: rilascio basato sullo stato di contatto `[13]`; RETREAT
+come opzione a terminazione pulita `[1]`.
+
+### 13.4 — Esito validato (entrambe le modalità)
+
+- `--curriculum 0`: eval **100%** (best) con il rilascio pulito attivo.
+- `--curriculum 1`: dip transitorio di adattamento, poi recupero a **100%** stabile;
+  comportamento emergente apprezzato: il braccio **apre il gripper e si allontana
+  verticalmente** («si alza») — esattamente la sequenza «prima rilascia, poi ritìrati».
+
+---
+
+## 14. §1.18 — Grip-Lock in Chiusura (env-level, deterministico)
+
+> Ultima rifinitura richiesta: presa più salda **durante la chiusura** (PUSH/HOLD).
+> Stessa ricetta validata di §1.17: env-level, deterministico, **zero reward**.
+
+### 14.1 — Causa osservata nei log
+
+Durante PUSH la policy *stocastica* manda occasionalmente comandi di **apertura** per
+rumore di esplorazione — visibile nei FSM LOG: `PUSH→REACH (grip=−0.56)`, `(grip=−0.79)`,
+`(grip=0.21)` → presa persa, FSM che retrocede, e in HOLD `hold_slip: −5.00` con
+`WIDTH 0.001` (dita richiuse a vuoto, maniglia scappata). Non è forza insufficiente: è
+**apertura accidentale** durante la chiusura.
+
+### 14.2 — Intervento
+
+In `env_v2.py`, negli override di fase PUSH **e** HOLD:
+
+```python
+if cfg.grip_lock_enabled and prev_is_phys_closed:
+    grip_floor = min(1.0, grip_thresh(handle_friction) + cfg.grip_lock_margin)
+    action[-1] = max(action[-1], grip_floor)    # blocca SOLO l'apertura
+```
+
+`config_v2.py`: `grip_lock_enabled = True`, `grip_lock_margin = 0.10` (sopra l'isteresi
+Schmitt §1.11).
+
+Proprietà di sicurezza:
+- **Direzionale**: clampa solo verso la chiusura minima; non stringe mai a fondo corsa
+  (+1). Il pavimento è `grip_thresh(frizione) + 0.10 ≈ 0.75–0.85`: su maniglie sottili
+  NON schiaccia le dita sotto la banda di contatto (§3.1).
+- **Auto-disattivante**: il lock vale solo se al passo precedente la presa era
+  **fisicamente** chiusa (`is_physically_closed`); se la presa si perde per geometria,
+  `prev_is_phys_closed → False` e il lock si spegne (niente stringimenti a vuoto).
+- **Adattivo e curriculum-agnostico**: usa la soglia adattiva alla frizione (§3.1
+  `[15]`) ed è identico a posa fissa e variabile.
+- **Zero reward**: stesso pattern degli override già validati al 100% (hard-freeze di
+  HOLD, rilascio pulito §1.17); il RETREAT (incluso il rilascio verticale) è intoccato.
+- Interruttore: `grip_lock_enabled = False` → comportamento §1.17 identico.
+
+Riferimenti: presa validata dallo stato di contatto/forza `[13]`; soglia di presa
+adattiva `[15]`.
+
+### 14.3 — Validazione e segnali attesi
+
+```bash
+python -m close_generalized_v2.train_gen_v2 --curriculum 1 --total-steps 800000
+python -m close_generalized_v2.train_gen_v2 --curriculum 0 --total-steps 800000
+```
+
+Conferma positiva: scompaiono (o quasi) i `PUSH→REACH (grip=−…)` e gli `hold_slip`;
+`WIDTH` resta nella banda di contatto (~0.04–0.05) per tutto PUSH/HOLD; `success_rate`
+al **100%** in entrambe le modalità; rilascio verticale in RETREAT invariato.
+
+### 14.4 — Quadro metodologico finale (per la tesi)
+
+La sequenza §1.16 → §1.17 → §1.18 fissa una regola operativa emersa empiricamente:
+
+| Tipo di obiettivo | Strumento corretto | Esempi |
+|---|---|---|
+| *Competenza del task* (cosa fare) | Reward (potential shaping `[3]`, termini in `R`) | §1.10, §1.14, §1.16 |
+| *Qualità del moto* a successo acquisito (come farlo) | Logica **deterministica env-level**, zero reward | hard-freeze HOLD, §1.17, §1.18 |
+
+Il tentativo §13.2 dimostra il costo di violare questa separazione: anche un termine
+positivo, limitato e post-successo può deviare l'esplorazione verso ottimi degeneri
+(reward hacking `[16]`). Gli override deterministici, al contrario, modificano la
+dinamica in modo prevedibile e non introducono nuovi obiettivi da «mungere».

@@ -83,6 +83,8 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         self._prev_action     : np.ndarray = np.zeros(self.action_space.shape)
         self._prev_eef_action : np.ndarray = np.zeros(self.action_space.shape[0] - 1)
         self._prev_door_angle : float = None
+        self._prev_gripper_width : float = 0.08  # §1.17 — larghezza gripper passo prec. (init: aperto)
+        self._prev_is_phys_closed : bool = False  # §1.18 — presa fisicamente chiusa al passo prec.
         self._diag_step       : int   = 0
 
     # ── Curriculum API (same as v1) ───────────────────────────────────────────
@@ -171,21 +173,59 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         phase = self._fsm.state.phase
         if phase == PHASE_HOLD:
             action[:-1] = 0.0  # Hard Freeze on arm  [§3.1 fix]
+            # §1.18 — GRIP-LOCK anche in HOLD: se la presa era fisicamente chiusa,
+            # impedisce aperture accidentali mentre si tiene la porta (anti hold_slip).
+            if getattr(self.cfg, "grip_lock_enabled", True) and self._prev_is_phys_closed:
+                grip_floor = min(1.0, self._fsm.grip_thresh(
+                    self._domain_rand.current_handle_friction) + self.cfg.grip_lock_margin)
+                action[-1] = max(float(action[-1]), grip_floor)
+
+        elif phase == PHASE_PUSH:
+            # §1.18 (env-level, ZERO modifiche al reward) — GRIP-LOCK in chiusura.
+            # Causa osservata nei log: durante PUSH la policy stocastica manda ogni
+            # tanto comandi di APERTURA (rumore di esplorazione: "PUSH→REACH
+            # (grip=-0.56)") → presa persa, FSM retrocede, hold_slip. Qui, SE al passo
+            # precedente la presa era fisicamente chiusa, il comando del gripper viene
+            # clampato a >= grip_thresh(frizione)+margine: il lock è DIREZIONALE
+            # (blocca solo l'apertura, non stringe oltre la richiesta della policy,
+            # per non scivolare sotto la banda di contatto su maniglie sottili §3.1).
+            # Deterministico, zero reward ⇒ non crea nuovi ottimi (stesso pattern di
+            # §1.17 e dell'hard-freeze di HOLD). Rif.: presa validata dal contatto
+            # [13]; soglia adattiva alla frizione [15].
+            if getattr(self.cfg, "grip_lock_enabled", True) and self._prev_is_phys_closed:
+                grip_floor = min(1.0, self._fsm.grip_thresh(
+                    self._domain_rand.current_handle_friction) + self.cfg.grip_lock_margin)
+                action[-1] = max(float(action[-1]), grip_floor)
 
         elif phase == PHASE_RETREAT:
-            retreat_pos = self._fsm.state.retreat_pos
-            if retreat_pos is not None:
-                eef_site_id = self._rs_env.robots[0].eef_site_id
-                if isinstance(eef_site_id, dict):
-                    site_id = eef_site_id.get('right', list(eef_site_id.values())[0])
-                else:
-                    site_id = eef_site_id
-                eef_pos      = self._rs_env.sim.data.site_xpos[site_id]
-                dist_retreat = float(np.linalg.norm(eef_pos - retreat_pos))
-                returned     = dist_retreat < self.cfg.return_pos_tol
+            # §1.17 (env-level, ZERO modifiche al reward) — RILASCIO PULITO prima del
+            # ritiro. Finché le dita non hanno superato la maniglia (gripper_width oltre
+            # il diametro + margine), si forza il gripper completamente APERTO e si CONGELA
+            # il braccio (come l'hard-freeze di HOLD): la maniglia può così "risalire"
+            # (latch → riposo) senza essere pizzicata, e SOLO dopo il rilascio fisico il
+            # braccio si allontana. Deterministico, non tocca il reward ⇒ non crea nuovi
+            # ottimi né intacca il 100% (rilascio basato sul contatto [13]; RETREAT come
+            # opzione a terminazione pulita [1]).
+            handle_diam   = self._domain_rand.current_handle_radius * 2.0
+            fingers_clear = self._prev_gripper_width > (handle_diam + self.cfg.retreat_clear_margin)
 
-                if returned or self._fsm.state.return_hold >= self.cfg.return_hold_steps:
-                    action = np.zeros_like(action)
+            if getattr(self.cfg, "retreat_clean_release", True) and not fingers_clear:
+                action[:-1] = 0.0     # congela il braccio (agisce solo il gripper)
+                action[-1]  = -1.0    # gripper completamente aperto → rilascio pulito
+            else:
+                retreat_pos = self._fsm.state.retreat_pos
+                if retreat_pos is not None:
+                    eef_site_id = self._rs_env.robots[0].eef_site_id
+                    if isinstance(eef_site_id, dict):
+                        site_id = eef_site_id.get('right', list(eef_site_id.values())[0])
+                    else:
+                        site_id = eef_site_id
+                    eef_pos      = self._rs_env.sim.data.site_xpos[site_id]
+                    dist_retreat = float(np.linalg.norm(eef_pos - retreat_pos))
+                    returned     = dist_retreat < self.cfg.return_pos_tol
+
+                    if returned or self._fsm.state.return_hold >= self.cfg.return_hold_steps:
+                        action = np.zeros_like(action)
 
         obs, _, rs_done, info = self._rs_env.step(action)
         self._step_count += 1
@@ -333,6 +373,8 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
 
         self._prev_action     = action.copy()
         self._prev_eef_action = action[:-1].copy()
+        self._prev_gripper_width = float(gripper_width)  # §1.17
+        self._prev_is_phys_closed = bool(is_phys_closed)  # §1.18
 
         # ── Info dict ─────────────────────────────────────────────────────────
         info                       = dict(info or {})
@@ -388,6 +430,8 @@ class AdvancedGeneralizedDoorEnv(RoboSuiteDoorCloseGymnasiumEnv):
         self._prev_action     = np.zeros(self.action_space.shape)
         self._prev_eef_action = np.zeros(self.action_space.shape[0] - 1)
         self._prev_door_angle = None
+        self._prev_gripper_width = 0.08  # §1.17
+        self._prev_is_phys_closed = False  # §1.18
         self._diag_step       = 0
 
         # ── Door position/yaw randomization (same as v1, via curriculum) ─────
