@@ -225,22 +225,22 @@ class AdaptiveFSM:
     def update(
         self,
         *,
-        door_angle       : float,
-        success_angle    : float,
-        gripper_action   : float,
-        dist_handle      : float,
-        handle_radius    : float,
-        handle_friction  : float,
-        is_physically_closed: bool,
-        gripper_width    : float,
-        prev_angle       : float,
-        control_freq     : int,
-        door_qpos        : float,
-        eef_pos          : np.ndarray,
-        door_quat_mujoco : np.ndarray,
-        latch_stiffness  : float,
-        base_latch_stiffness: float,
-        beta_probs       : Optional[dict] = None,  # §3.5 β-network outputs
+        door_angle           : float,
+        success_angle        : float,
+        gripper_action       : float,
+        dist_handle          : float,
+        handle_radius        : float,
+        handle_friction      : float,
+        is_physically_closed : bool,
+        gripper_width        : float,
+        prev_angle           : float,
+        control_freq         : int,
+        door_qpos            : float,
+        eef_pos              : np.ndarray,
+        door_quat_mujoco     : np.ndarray,
+        latch_stiffness      : float,
+        base_latch_stiffness : float,
+        beta_probs           : Optional[dict] = None,  # §3.5 β-network outputs
     ) -> dict:
         """
         Run one FSM step and return a dict of transition events.
@@ -309,9 +309,9 @@ class AdaptiveFSM:
                 s.grasp_confirm_count = 0
 
             if s.grasp_confirm_count >= self._GRASP_CONFIRM_STEPS:
-                s.phase               = PHASE_PUSH
-                s.grasp_confirm_count = 0
-                s.reach_steps         = 0
+                s.phase                = PHASE_PUSH
+                s.grasp_confirm_count  = 0
+                s.reach_steps          = 0
                 events["just_grasped"] = True
                 s.events.append(f"REACH→PUSH (d={dist_handle:.3f}, g={gripper_action:.2f})")
 
@@ -337,8 +337,8 @@ class AdaptiveFSM:
                 push_to_hold = push_to_hold and (beta_probs["beta_push"] > 0.5)
 
             if push_to_hold:
-                s.phase      = PHASE_HOLD
-                s.push_steps = 0
+                s.phase                  = PHASE_HOLD
+                s.push_steps             = 0
                 events["just_succeeded"] = True
                 s.events.append(f"PUSH→HOLD (angle={door_angle:.3f})")
                 return events
@@ -347,18 +347,15 @@ class AdaptiveFSM:
             door_speed         = abs(prev_angle - door_angle) * control_freq
             effective_lose_tol = float(np.clip(0.05 + door_speed * 0.5, 0.05, 0.12))
             near_latch         = door_angle < 0.05
+
             if near_latch:
                 effective_lose_tol = 0.10
 
             # PUSH → REACH (grasp lost) — Schmitt trigger + hysteresis (§1.11)
-            # The chatter at 400k (grasp_rate ~14/ep) came from dropping the grasp on
-            # a SINGLE sub-threshold gripper frame. Fix: (a) release at a LOWER grip
-            # threshold than the one required to enter PUSH (Schmitt), and (b) require
-            # fsm_grasp_lose_steps consecutive bad frames before declaring loss. This
-            # absorbs the gripper noise without weakening the genuine-loss detection.
             door_speed         = abs(prev_angle - door_angle) * control_freq
             effective_lose_tol = float(np.clip(0.05 + door_speed * 0.5, 0.05, 0.12))
             near_latch         = door_angle < 0.05
+
             if near_latch:
                 effective_lose_tol = 0.10
 

@@ -3,8 +3,8 @@
 #
 # Training entry-point for AdvancedGeneralizedDoorEnv (v2)
 
-# rename runs/... folder into runs/close_gen_v2 --> fixed_pose     (800_000 steps)
-# rename runs/... folder into runs/close_gen_v2 --> non-fixed pose (1_500_000 steps)
+# rename runs/... folder into runs/close_gen_v2 --> CURR 0 (800_000 steps)
+# rename runs/... folder into runs/close_gen_v2 --> CURR 1 (800_000 steps)
 
 import numpy as np
 import os, sys, time, argparse
@@ -156,11 +156,11 @@ class CustomEvalCallbackV2(BaseCallback):
     def __init__(
         self,
         eval_env,
-        best_model_save_path: str,
-        log_path            : str,
-        eval_freq           : int = 10_000,
-        n_eval_episodes     : int = 20,
-        verbose             : int = 1,
+        best_model_save_path : str,
+        log_path             : str,
+        eval_freq            : int = 10_000,
+        n_eval_episodes      : int = 20,
+        verbose              : int = 1,
     ):
         super().__init__(verbose)
         self.eval_env             = eval_env
@@ -226,12 +226,14 @@ class CustomEvalCallbackV2(BaseCallback):
                         # RECOVERY: RELOAD BEST MODEL
                         best_p  = os.path.join(self.best_model_save_path, "best_model.zip")
                         best_vn = os.path.join(self.best_model_save_path, "vecnormalize.pkl")
+
                         if os.path.exists(best_p):
                             self.model.set_parameters(best_p)
                         if os.path.exists(best_vn) and self.model.get_vec_normalize_env():
                             with open(best_vn, "rb") as f:
                                 bvn = pickle.load(f)
                             self.model.get_vec_normalize_env().obs_rms = bvn.obs_rms
+
                         self.degradation_count = 0
                         print("[RECOVERY v2] Reloaded best model.")
                 else:
@@ -284,9 +286,11 @@ def main():
 
     parser.add_argument("--beta-net", action = "store_true", help = "Enable beta-network (§3.5) — Phase 4")
     parser.add_argument(
-        "--curriculum", type = float, default = None,
-        help = "Fissa il livello di curriculum: 0=posa fissa, 1=posa variabile piena. "
-               "Se omesso → curriculum adattivo 0→1.",
+        "--curriculum",
+        type    = float,
+        default = None,
+        help    = "Fissa il livello di curriculum: 0=posa fissa, 1=posa variabile piena. "
+                "Se omesso → curriculum adattivo 0→1.",
     )
     args = parser.parse_args()
 
@@ -310,9 +314,10 @@ def main():
 
     # ── Play mode ─────────────────────────────────────────────────────────────
     if args.play:
-        raw_env = AdvancedGeneralizedDoorEnv(cfg, render_mode="human")
-        # §1.15 — il play mostra il livello scelto: --curriculum 0 = posa fissa,
-        # --curriculum 1 = posa variabile. Senza flag: posa variabile (1.0) come prima.
+        raw_env = AdvancedGeneralizedDoorEnv(cfg, render_mode = "human")
+        # §1.15 — il play mostra il livello scelto!
+        # --curriculum 0 = posa fissa,
+        # --curriculum 1 = posa variabile
         play_level = args.curriculum if args.curriculum is not None else 1.0
         raw_env.set_curriculum_level(play_level)
         print(f"[PLAY v2] curriculum_level = {play_level:.2f}")
@@ -432,9 +437,9 @@ def main():
 
         print(f"[v2] Training for {cfg.total_steps:,} steps → {cfg.run_dir}")
 
-        # §1.15 — Assembla i callback. La curriculum ADATTIVA gira solo se il livello
-        # NON è fissato; se è fissato, ancoriamo subito tutti gli env di training al
-        # livello scelto (la reset() lo ri-fissa comunque a ogni episodio).
+        # §1.15 — Assembla i callback. La curriculum ADATTIVA gira solo se il livello NON è fissato
+        # Se è fissato, ancoriamo subito tutti gli env di training al
+        # livello scelto (la reset() lo ri-fissa comunque a ogni episodio)
         callbacks = [scb, gcb]
         if cfg.fixed_curriculum_level is None:
             callbacks.append(ccb)

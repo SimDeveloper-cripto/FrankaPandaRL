@@ -2,9 +2,9 @@
 # close_generalized_v2/config_v2.py
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Tuple, Optional
 
+from typing import Tuple, Optional
+from dataclasses import dataclass, field
 
 @dataclass
 class TrainConfigV2:
@@ -37,17 +37,10 @@ class TrainConfigV2:
     gamma          : float = 0.95
     tau            : float = 0.005
     train_freq     : int   = 1
-    gradient_steps : int   = 1      # was 2 — reduce to slow down Q overfit during early exploration
+    gradient_steps : int   = 1      # was 2   — reduce to slow down Q overfit during early exploration
     learning_starts: int   = 20_000 # was 10k — more random steps before policy locks in
     ent_coef       : str   = "auto"
 
-    # §1.13 — Pavimento di entropia per SAC. Con il default target_entropy = −dim_azione
-    # (≈ −7 per OSC_POSE), ent_coef collassa a ~7e-5 → esplorazione nulla. Se ciò avviene
-    # PRIMA che la policy scopra la sequenza di chiusura, resta intrappolata nell'ottimo
-    # locale di "accampamento" in REACH. Un target meno negativo mantiene l'esplorazione
-    # viva attraverso la finestra di scoperta, senza impedire la convergenza finale
-    # (SAC continua ad auto-tarare ent_coef verso questo target). Tunabile: per azione a
-    # 4 dimensioni usare ~ −2.0.
     target_entropy : float = -3.0
 
     # ── Network Architecture ───────────────────────────────────────────────────
@@ -68,42 +61,18 @@ class TrainConfigV2:
     w_progress   : float = 0.0
     w_delta      : float = 2.0
     w_action     : float = 0.0
-    time_penalty : float = 0.1   # was 0.5 — reduced: -0.50/step (-300/ep) drowned shaping signal
+    time_penalty : float = 0.1    # was 0.5 — reduced: -0.50/step (-300/ep) drowned shaping signal
     success_bonus: float = 100.0  # §1.14 — one-time bonus al completamento del task.
-    # Dimensionato per preservare il valore dello stato di retreat-completo: con γ=0.95
-    # il valore SCONTATO del "mungere" la reward di RETREAT (~+3/step) è ≈ 3/(1−γ) ≈ 60,
-    # NON +2000 (quello è il ritorno NON scontato su 400 step). Un bonus ≳ 60 rende
-    # "termina" preferibile a "continua", senza cliff destabilizzanti.
 
-    # §1.14 — Terminazione al completamento del RETREAT.
-    # Senza stato terminale, l'episodio gira fino all'orizzonte (ep_len=500) e la policy
-    # continua a muovere il braccio per raccogliere ret_dir/ret_grip. Terminare quando il
-    # retreat è sostenuto + porta chiusa + latch neutro risolve durata episodio E
-    # movimento residuo del braccio.
     terminate_on_retreat_complete: bool = True
     fsm_retreat_target_steps     : int  = 30   # step sostenuti in RETREAT prima di terminare
 
-    # §1.15 — RETREAT: immobilizzazione del braccio + rilascio pulito della maniglia.
-    # La zona di "settle" è allargata rispetto al vecchio freeze a 0.02 m (soglia quasi
-    # mai raggiunta → il braccio continuava a inseguire il target via ret_dir). Appena
-    # entro `fsm_retreat_settle_dist` dalla posa di retreat, il braccio si FERMA
-    # (penalità su tutte le DOF tranne il gripper) e riceve un bonus di rilascio solo a
-    # porta chiusa + gripper aperto. La terminazione §1.14 resta invariata, quindi la
-    # lunghezza d'episodio NON cambia.
     fsm_retreat_settle_dist: float = 0.06   # [m] entro cui immobilizzare invece di inseguire
     w_retreat_settle       : float = 20.0   # forza dell'immobilizzazione (= vecchio freeze)
 
-    # §1.16 — GRIP IN CHIUSURA: peso del reward (positivo, limitato) per il mantenimento
-    # del contatto fisico durante PUSH, scalato sul progresso di chiusura. Premia lo STATO
-    # di buona presa (gripper_width nella banda is_physically_closed), non lo stringere di
-    # più (su maniglie sottili stringere oltre perde il contatto, §3.1). Bounded e
-    # non-negativo ⇒ §1.13-safe; nessun effetto a porta aperta (closing_progress≈0).
     w_grip_contact         : float = 0.5
 
-    # §1.15 — Pinning del livello di curriculum (due modalità di training senza toccare
-    # il codice esistente):
-    #   None  → curriculum ADATTIVO 0→1 (comportamento attuale, via AdaptiveCurriculumV2)
-    #   0.0   → POSA FISSA (riproduce il run attuale): nessuna randomizzazione di posa,
+    #   0.0   → POSA FISSA (riproduce il run attuale): nessuna randomizzazione di posa e
     #           fisica sempre randomizzata. Curriculum adattivo disattivato.
     #   1.0   → POSA VARIABILE piena dall'inizio (pos ±15 cm, yaw ±17°).
     # L'env ri-fissa il livello a ogni reset, quindi non può driftare.
@@ -116,25 +85,14 @@ class TrainConfigV2:
     return_hold_steps  : int   = 10
     return_pos_tol     : float = 0.05
 
-    # §1.17 — RILASCIO PULITO nel RETREAT (env-level, DETERMINISTICO, zero reward).
-    # Prima di allontanarsi, l'env forza il gripper aperto e CONGELA il braccio finché le
-    # dita non hanno superato la maniglia (gripper_width > diametro + margine): così la
-    # maniglia risale (latch → riposo) senza essere pizzicata. Nessun termine di reward ⇒
-    # nessun rischio di destabilizzare il training (a differenza dello shaping §1.17-reward
-    # che era stato ritirato). Rif.: rilascio basato sul contatto [13]; opzione a
-    # terminazione pulita [1].
+    # Rif.: rilascio basato sul contatto [13]; opzione a terminazione pulita [1]
     retreat_clean_release : bool  = True   # off = comportamento §1.16 (nessun gate)
     retreat_clear_margin  : float = 0.02   # [m] oltre il diametro maniglia per "dita libere"
 
-    # §1.18 — GRIP-LOCK in chiusura (env-level, DETERMINISTICO, zero reward).
-    # In PUSH e HOLD, se al passo precedente la presa era FISICAMENTE chiusa
-    # (is_physically_closed), l'env impedisce i comandi di APERTURA accidentali del
-    # gripper (rumore di esplorazione della policy stocastica): il comando viene
-    # clampato a >= grip_thresh(frizione) + grip_lock_margin. È DIREZIONALE: blocca
-    # solo l'apertura, NON stringe oltre quanto chiede la policy (su maniglie sottili
-    # stringere oltre farebbe scivolare le dita sotto la banda di contatto, §3.1).
-    # Nessun termine di reward ⇒ nessun rischio di destabilizzare il training (stesso
-    # pattern env-level di §1.17 e dell'hard-freeze di HOLD, entrambi validati al 100%).
+    # Rif.: avvio morbido dell'opzione di ritiro [1]; nessun nuovo termine di reward [3]
+    retreat_rampup_enabled : bool = True
+    retreat_rampup_steps   : int  = 8     # 0 = comportamento §1.17 identico
+
     # Rif.: validazione della presa basata sul contatto/forza [13]; soglia adattiva
     # alla frizione come §3.1 [15].
     grip_lock_enabled     : bool  = True   # off = comportamento §1.17 (nessun lock)
@@ -164,7 +122,7 @@ class TrainConfigV2:
 
     # §1.11 — Schmitt trigger + hysteresis on grasp loss (anti-chatter).
     # Release the grasp at a LOWER threshold than required to enter PUSH, and only
-    # after several consecutive bad frames. Kills the REACH<->PUSH chatter seen at 400k.
+    # after several consecutive bad frames. Kills the REACH <-> PUSH chatter seen at 400k.
     fsm_grip_release_margin: float = 0.20  # release_thresh = grip_thresh - this
     fsm_grasp_lose_steps   : int   = 3     # consecutive bad frames before declaring loss
 
@@ -191,16 +149,20 @@ class TrainConfigV2:
     # ── Potential magnitudes ──────────────────────────────────────────────────
 
     # CRITICAL: these are now SMALL on purpose. Potential-based shaping is an
-    # auxiliary GUIDANCE term, not the objective. With the cumulative design,
-    # Phi accumulates across phases (Phi_reach + Phi_push + Phi_hold + ...), and the
+    # auxiliary GUIDANCE term, not the objective.
+    # With the cumulative design, Phi accumulates across phases
+    #               (Phi_reach + Phi_push + Phi_hold + ...), and the
     # discounted shaping F = (gamma * Phi') - Phi leaves a standing drift of
-    # (gamma-1) * Phi = -0.05 * Phi, per step. The previous values (25/50/5) made
+    # (gamma-1) * Phi = -0.05 * Phi, per step.
+    # 
+    # The previous values (25/50/5) made
     # Phi ~ 75-100 -> a -3.75..-5/step penalty that punished the agent for staying
     # in PUSH/HOLD/RETREAT (lethal, since the arm is frozen in HOLD). See §1.10.A.
     #
     # With these O(1-5) values: Phi_HOLD ~ 5-9 -> drift <= -0.5/step, fully dwarfed
     # by the genuine reward (dense reach + ratcheted door progress + +1/step hold
     # bonuses).
+    #
     # gamma stays at 0.95, so Ng et al. (1999) policy invariance is EXACT.
     # The grasp transition still gets a clean ~+gamma * w_reach bonus from the Phi jump.
 

@@ -155,9 +155,9 @@ class MultiApproachGrasp:
         is feasible in each configuration.
         """
         if eef_quat is None:
-            return np.zeros(self.n_candidates + 1, dtype=np.float32)
+            return np.zeros(self.n_candidates + 1, dtype = np.float32)
 
         best, best_idx, aligns = self.compute_alignment(
             eef_quat, handle_pos, eef_pos, door_quat_mujoco
         )
-        return np.array([best] + aligns, dtype=np.float32)
+        return np.array([best] + aligns, dtype = np.float32)

@@ -44,9 +44,9 @@ class PotentialBasedReward:
 
     The potential Φ(s) is defined hierarchically, one component per FSM phase:
 
-        Φ(s) = Φ_reach(s) ×   [phase=REACH]
-             + Φ_push(s)  ×   [phase=PUSH]
-             + Φ_hold(s)  ×   [phase=HOLD]
+        Φ(s) = Φ_reach(s)   × [phase=REACH]
+             + Φ_push(s)    × [phase=PUSH]
+             + Φ_hold(s)    × [phase=HOLD]
              + Φ_retreat(s) × [phase=RETREAT]
 
     Each Φ_i is non-negative and bounded, so the shaping reward F is bounded
@@ -66,10 +66,8 @@ class PotentialBasedReward:
         self.cfg   = cfg
         self.gamma = gamma
         self._prev_phi: Optional[float] = None
-        # Reward-owned ratchet for the PUSH door-progress reward.
-        # MUST be independent of fsm_state.min_door_angle: the FSM updates its own
-        # min BEFORE the reward runs (env_v2 calls fsm.update() then reward.compute()),
-        # so reading the FSM's min would always give delta=0. See §1.10.C.
+
+        # Reward-owned ratchet for the PUSH door-progress reward
         self._min_door_angle: Optional[float] = None
 
     def reset(self) -> None:
@@ -174,36 +172,36 @@ class PotentialBasedReward:
     def compute(
         self,
         *,
-        fsm_state       : FSMState,
-        base_reward     : float,
-        door_angle      : float,
-        door_max        : float,
-        door_qpos       : float,
-        dist_handle     : float,
-        dist_xy         : float,
-        height_diff     : float,
-        handle_radius   : float,
-        handle_friction : float,
-        grip_thresh     : float,
-        gripper_action  : float,
-        gripper_width   : float,
-        is_physically_closed: bool,
-        gripper_qpos    : Optional[np.ndarray],
-        alignment       : float,
-        flat_alignment  : float,
-        joint_vel       : Optional[np.ndarray],
-        action          : np.ndarray,
-        prev_eef_action : np.ndarray,
-        eef_pos         : np.ndarray,
-        latch_qpos      : float,
-        door_qvel       : float,
-        curriculum_lvl  : float,
-        just_grasped    : bool = False,
-        just_succeeded  : bool = False,
-        just_hold_done  : bool = False,
-        grasp_lost      : bool = False,
-        terminated      : bool = False,
-        truncated       : bool = False,
+        fsm_state            : FSMState,
+        base_reward          : float,
+        door_angle           : float,
+        door_max             : float,
+        door_qpos            : float,
+        dist_handle          : float,
+        dist_xy              : float,
+        height_diff          : float,
+        handle_radius        : float,
+        handle_friction      : float,
+        grip_thresh          : float,
+        gripper_action       : float,
+        gripper_width        : float,
+        is_physically_closed : bool,
+        gripper_qpos         : Optional[np.ndarray],
+        alignment            : float,
+        flat_alignment       : float,
+        joint_vel            : Optional[np.ndarray],
+        action               : np.ndarray,
+        prev_eef_action      : np.ndarray,
+        eef_pos              : np.ndarray,
+        latch_qpos           : float,
+        door_qvel            : float,
+        curriculum_lvl       : float,
+        just_grasped         : bool = False,
+        just_succeeded       : bool = False,
+        just_hold_done       : bool = False,
+        grasp_lost           : bool = False,
+        terminated           : bool = False,
+        truncated            : bool = False,
     ) -> tuple[float, bool, bool]:
         """
         Returns
@@ -242,19 +240,8 @@ class PotentialBasedReward:
 
             if self._prev_phi is not None:
                 # Ng et al. (1999) shaping, kept EXACT at the MDP's gamma so the
-                # optimal policy of the true reward R is provably preserved.
-                #
-                # The previous v2 made this term lethal NOT because of gamma, but
-                # because the cumulative offsets made Phi huge (~25..100). The
-                # discount term (gamma-1)*Phi then imposed a standing penalty of
-                # -0.05*Phi per step (up to -5/step in the FROZEN hold phase),
-                # punishing the agent for *being* in PUSH/HOLD/RETREAT. See §1.10.A.
-                #
-                # Fix: the potentials are now small (O(1-5), see config_v2), so the
-                # drift is <= -0.5/step and is dwarfed by the genuine reward terms.
-                # The task objective lives in R (dense reach + ratcheted door
-                # progress + sparse hold), NOT in the shaping. This is exactly the
-                # role Ng et al. intend for Phi: guidance, not objective.
+                # optimal policy of the true reward R is provably preserved
+
                 shaping = self.gamma * phi_now - self._prev_phi
                 rew_info["phi_shape"] = float(np.clip(shaping, -10.0, 10.0))
 
@@ -271,8 +258,8 @@ class PotentialBasedReward:
             # In the cumulative-potential design Phi_reach == 0, so REACH receives
             # NO shaping gradient at all. These dense terms are therefore the ONLY
             # approach signal and must be as strong as the working v1 reward
-            # (env_gen.py), otherwise the arm stalls at mid-distance. The previous
-            # v2 had weakened them (-2 dist, no xy) on the false assumption that the
+            # (env_gen.py), otherwise the arm stalls at mid-distance.
+            # The previous v2 had weakened them (-2 dist, no xy) on the false assumption that the
             # potential would help here — it cannot. See §1.10.B.
             rew_info["dist_3d"] = -5.0  * k * dist_handle
             rew_info["dist_xy"] = -3.0  * k * (dist_xy if dist_xy is not None else dist_handle)
@@ -283,7 +270,7 @@ class PotentialBasedReward:
                 rew_info["app_blw"] = -3.0 * abs(height_diff + 0.005)
             if height_diff > 0.03:
                 # Penalise being above handle (condition was gated on gripper_action > 0.2
-                # which is NEVER true in REACH — gripper is always open/negative).
+                # which is NEVER true in REACH — gripper is always open/negative)
                 rew_info["app_top"] = -1.5 * height_diff
 
             # Multi-approach alignment  [§3.3, ten Pas 2017] — handled separately
@@ -366,18 +353,19 @@ class PotentialBasedReward:
 
             # §1.16 — GRIP IN CHIUSURA: premia il MANTENIMENTO del contatto fisico
             # (is_physically_closed = gripper_width nella banda di buona presa) MENTRE la
-            # porta si chiude, scalato sul progresso di chiusura. È un reward POSITIVO e
-            # limitato che premia lo STATO desiderato, NON lo "stringere di più": su
-            # maniglie sottili stringere oltre farebbe scendere gripper_width sotto la
+            # porta si chiude, scalato sul progresso di chiusura.
+            # È un reward POSITIVO e limitato che premia lo STATO desiderato, NON lo "stringere di più":
+            # su maniglie sottili stringere oltre farebbe scendere gripper_width sotto la
             # soglia di contatto e perderebbe la presa (§3.1). La scala sul progresso
             # (closing_progress ≈ 0 a porta aperta → 1 a porta chiusa) evita un nuovo
             # incentivo ad "accamparsi" tenendo ferma una porta aperta: tenere una porta
-            # aperta paga ~0; il segnale cresce solo mentre/dopo aver chiuso. Bounded e
-            # non-negativo ⇒ nessuna "valle" negativa (§1.13); vive in R (non nello
-            # shaping Φ) quindi l'invarianza di Ng resta intatta. Indipendente dal
-            # curriculum ⇒ effetto identico a livello 0 e 1.
+            # aperta paga ~0; il segnale cresce solo mentre/dopo aver chiuso.
+            # 
+            # Bounded e non-negativo ⇒ nessuna "valle" negativa (§1.13); vive in R (non nello
+            # shaping Φ) quindi l'invarianza di Ng resta intatta.
+            # Indipendente dal curriculum ⇒ effetto identico a livello 0 e 1.
             if is_physically_closed and door_max > 1e-6:
-                closing_progress = float(np.clip(1.0 - door_angle / door_max, 0.0, 1.0))
+                closing_progress         = float(np.clip(1.0 - door_angle / door_max, 0.0, 1.0))
                 rew_info["grip_contact"] = self.cfg.w_grip_contact * closing_progress
 
         # ══════════════════════════════════════════════════════════════════════
@@ -452,12 +440,15 @@ class PotentialBasedReward:
                     rew_info["ret_down"] = -5.0 * abs(action[2])
 
             # Directional reward toward retreat target, poi SETTLE (immobilizza + rilascia).
+            #
             # §1.15 — la zona di settle è allargata (fsm_retreat_settle_dist) rispetto al
             # vecchio freeze a 0.02 m, che non veniva quasi mai raggiunto → il braccio
-            # continuava a inseguire il target via ret_dir e non si fermava mai. Ora, appena
-            # vicino alla posa di retreat, il braccio si FERMA (penalità su tutte le DOF
+            # continuava a inseguire il target via ret_dir e non si fermava mai.
+            # 
+            # Ora, appena vicino alla posa di retreat, il braccio si FERMA (penalità su tutte le DOF
             # tranne il gripper) e riceve un bonus di rilascio solo a porta chiusa + gripper
-            # aperto. La terminazione §1.14 resta invariata → la len d'episodio non cambia.
+            # aperto.
+            # La terminazione §1.14 resta invariata → la len d'episodio non cambia.
             if dist_to_target > self.cfg.fsm_retreat_settle_dist:
                 dir_to_target    = fsm_state.retreat_pos - eef_pos
                 dir_norm         = dir_to_target / (dist_to_target + 1e-6)
@@ -489,10 +480,8 @@ class PotentialBasedReward:
 
             # §1.14 — Stato TERMINALE al completamento del task.
             # Quando il RETREAT è sostenuto (la porta è rimasta chiusa abbastanza a lungo)
-            # e la porta è chiusa e il latch è neutro, il task È finito: terminare qui
-            # (1) accorcia l'episodio (~step 120 invece di 500) e (2) toglie sia
-            # l'incentivo sia l'occasione di continuare a muovere il braccio per
-            # raccogliere ret_dir/ret_grip. Bonus una tantum a preservare il valore.
+            # e la porta è chiusa e il latch è neutro, il task è finito. 
+            # Bonus una tantum a preservare il valore.
             if (self.cfg.terminate_on_retreat_complete
                     and fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps
                     and abs(door_qpos)  < 0.03
