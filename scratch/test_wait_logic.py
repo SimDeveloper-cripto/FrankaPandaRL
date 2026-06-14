@@ -25,8 +25,8 @@ class WaitDoorEnv(GeneralizedDoorEnv):
         return obs, reward, terminated, truncated, info
 
 def run_test():
-    cfg     = TrainConfig(run_dir="runs/close_gen", num_envs=1, horizon=500)
-    raw_env = WaitDoorEnv(cfg)
+    cfg                      = TrainConfig(run_dir = "runs/close_gen", num_envs = 1, horizon = 500)
+    raw_env                  = WaitDoorEnv(cfg)
     raw_env.curriculum_level = 1.0
 
     vn_path     = "runs/close_gen/vecnormalize.pkl"
@@ -36,7 +36,7 @@ def run_test():
     vec_env.training    = False
     vec_env.norm_reward = False
     
-    model = SAC.load("runs/close_gen/best_model.zip", env=vec_env)
+    model = SAC.load("runs/close_gen/best_model.zip", env = vec_env)
 
     successes = 0
     for ep in range(10):

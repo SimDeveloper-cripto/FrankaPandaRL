@@ -67,32 +67,32 @@ class HoldFreezeDoorEnv(GeneralizedDoorEnv):
         return self._flatten_obs(obs), reward, terminated, truncated, info
 
 def run_test():
-    cfg = TrainConfig(run_dir="runs/close_gen", num_envs=1, horizon=500)
+    cfg     = TrainConfig(run_dir = "runs/close_gen", num_envs = 1, horizon = 500)
     raw_env = HoldFreezeDoorEnv(cfg)
     raw_env.curriculum_level = 1.0
-    
-    vn_path = "runs/close_gen/vecnormalize.pkl"
-    raw_env_vec = DummyVecEnv([lambda: raw_env])
-    vec_env = VecNormalize.load(vn_path, raw_env_vec)
-    vec_env.training = False
+
+    vn_path             = "runs/close_gen/vecnormalize.pkl"
+    raw_env_vec         = DummyVecEnv([lambda: raw_env])
+    vec_env             = VecNormalize.load(vn_path, raw_env_vec)
+    vec_env.training    = False
     vec_env.norm_reward = False
-    
-    model = SAC.load("runs/close_gen/best_model.zip", env=vec_env)
-    
+
+    model = SAC.load("runs/close_gen/best_model.zip", env = vec_env)
+
     successes = 0
-    lengths = []
-    
+    lengths   = []
+
     for ep in range(10):
-        obs = vec_env.reset()
-        done = False
+        obs   = vec_env.reset()
+        done  = False
         steps = 0
-        
+
         while not done:
             action, _ = model.predict(obs, deterministic=True)
             obs, rewards, dones, infos = vec_env.step(action)
-            done = dones[0]
+            done  = dones[0]
             steps += 1
-        
+
         is_success = infos[0].get("is_success", False)
         lengths.append(steps)
         print(f"Episode {ep+1} - Steps: {steps} - Success: {is_success}")

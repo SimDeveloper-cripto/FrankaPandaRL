@@ -1,9 +1,3 @@
-venv/
 .venv/
-.idea/
-.env
 __pycache__/
 .DS_Store
-papers/
-close_gen_model_almost_complete/
-doc/
