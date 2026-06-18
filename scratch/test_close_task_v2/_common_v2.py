@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # tests_v2/_common_v2.py
 #
-# Rif.: FSM/opzioni a soglie adattive [1][2].
+# Rif.: FSM/opzioni a soglie adattive [1][2]
 
 import os
 import sys
@@ -56,7 +56,7 @@ def norm_obs(obs, obs_rms):
     return np.clip((obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8), -10.0, 10.0)
 
 
-def predict(model, obs, obs_rms, deterministic=True):
+def predict(model, obs, obs_rms, deterministic = True):
     return model.predict(norm_obs(obs, obs_rms), deterministic=deterministic)
 
 
