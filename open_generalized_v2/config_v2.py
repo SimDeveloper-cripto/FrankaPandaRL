@@ -137,6 +137,20 @@ class TrainConfigV2Open:
     # §1.17 — rilascio pulito nel RETREAT.
     retreat_clean_release : bool  = True
     retreat_clear_margin  : float = 0.02
+    # §1.22 — accompagnamento della LEVA/maniglia alla posizione di partenza PRIMA del
+    # rilascio (env-level, ZERO reward). A porta aperta e ferma, durante la presa la leva
+    # è tenuta ruotata; prima di staccarsi il braccio mantiene la presa e lascia che la
+    # molla di richiamo riporti la leva a latch≈0 (specchio della chiusura, che NON termina
+    # finché |latch_qpos| non è sotto soglia). È motion-quality a successo già raggiunto →
+    # deterministico, nessun retraining, nessun rischio per il reward che funziona.
+    retreat_latch_restore     : bool  = True
+    retreat_latch_neutral_tol : float = 0.05    # |latch_qpos| sotto cui la leva è "a posto"
+    # §1.26 — CAP temporale dell'accompagnamento leva: la CHIUSURA può attendere la leva
+    # perché lì il latch torna a 0 da solo; nell'APERTURA la leva può NON neutralizzarsi
+    # (porta spalancata) e il braccio resterebbe aggrappato all'infinito (ep_len alto, il
+    # robot non si ritira — vedi screenshot). Quindi: accompagna la leva al MASSIMO per
+    # questi step; superati, procedi comunque a rilascio+ritiro. Allineato a retreat_target.
+    retreat_latch_max_steps   : int   = 20
     # §1.18 — grip-lock in PULL/HOLD_OPEN (blocca aperture accidentali).
     grip_lock_enabled     : bool  = True
     grip_lock_margin      : float = 0.10
@@ -152,6 +166,11 @@ class TrainConfigV2Open:
 
     success_bonus    : float = 5.0
     action_smooth_alpha: float = 0.8
+    # §1.25 — LATCH MONITOR nel RETREAT (mirror di latch_ret della chiusura). Insegna ad
+    # accompagnare la maniglia alla posizione di partenza PRIMA di staccarsi. Attivo SOLO
+    # in RETREAT → non interferisce col task (apertura). Peso moderato come la chiusura (1.0).
+    w_latch_ret          : float = 1.0
+    retreat_latch_term_tol: float = 0.08   # leva "a posto" per terminare (come chiusura)
 
     # ── Domain randomization estesa (§3.4) — sempre attiva ───────────────────────
     rand_latch_stiffness    : bool  = True

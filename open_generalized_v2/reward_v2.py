@@ -83,6 +83,7 @@ class PotentialBasedRewardOpen:
         curriculum_lvl: float,
         is_physically_closed: bool,
         action        : np.ndarray,
+        latch_qpos    : float = 0.0,
         just_succeeded: bool,
         rs_done       : bool,
         step_count    : int,
@@ -189,6 +190,14 @@ class PotentialBasedRewardOpen:
             regress = max(0.0, prev_angle - door_angle)   # door_angle che cala = si richiude
             rew["door_regress"] = -self.cfg.w_door_regress * regress
 
+            # §1.25 — LATCH MONITOR (mirror ESATTO di latch_ret della chiusura): penalizza
+            # la leva ancora RUOTATA in ogni step del RETREAT. È il segnale APPRESO che
+            # insegna ad accompagnare la maniglia alla posizione di partenza PRIMA di
+            # staccarsi, invece di rilasciare di colpo con la leva sotto tensione.
+            # Attivo SOLO in RETREAT (fase post-successo) → non può interferire con
+            # REACH/PULL/HOLD che portano al goal. Rif. close reward "latch_ret".
+            rew["latch_ret"] = -self.cfg.w_latch_ret * abs(latch_qpos)
+
         # ── successo / terminazione ──
         if just_succeeded:
             rew["success_bonus"] = self.cfg.success_bonus
@@ -196,7 +205,16 @@ class PotentialBasedRewardOpen:
         terminated = False
         truncated = bool(rs_done) or (step_count >= horizon)
 
-        # terminazione pulita: in RETREAT, mantenuto aperto + braccio rientrato
+        # §1.25 (CORRETTO) — terminazione allineata alla FISICA dell'apertura.
+        # LEZIONE: nella CHIUSURA la terminazione richiede latch<0.08 perché lì la porta va
+        # a door=0 e il latch SCATTA a zero da solo (stato di riposo naturale). Nell'APERTURA
+        # la porta resta APERTA al goal e la leva NON torna a zero da sola in quello stato:
+        # mettere latch<tol come gate di terminazione causa episodi che non finiscono mai
+        # (ep_len~580, ep_rew~-800, eval crolla). Quindi la terminazione torna alla condizione
+        # FISICAMENTE RAGGIUNGIBILE — porta aperta + retreat sostenuto, come la versione al 100%.
+        # L'accompagnamento della leva resta INSEGNATO dalla penalità latch_ret sopra (continua
+        # durante il RETREAT, identica alla chiusura): la policy impara a riportare la leva,
+        # ma se non arriva a zero perfetto l'episodio si chiude comunque (no deadlock).
         if ph == RETREAT and fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps:
             door_open_ok = door_angle >= goal_angle - open_tol
             if door_open_ok:

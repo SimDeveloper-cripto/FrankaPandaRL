@@ -249,10 +249,31 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                 grip_floor = min(1.0, self._fsm.grip_thresh(handle_friction) + self.cfg.grip_lock_margin)
                 action[-1] = max(float(action[-1]), grip_floor)
 
-        # ── §1.17 RILASCIO PULITO + §1.21 RAMPA in RETREAT ──
+        # ── §1.22 ACCOMPAGNA LEVA + §1.17 RILASCIO PULITO + §1.21 RAMPA in RETREAT ──
         elif phase == PHASE_RETREAT:
+            # §1.22 — PRIMA di rilasciare, accompagna la LEVA alla posizione di partenza
+            # (env-level, ZERO reward, NESSUNO step extra: si MODIFICA solo l'azione).
+            # Mantieni la presa e congela il braccio: la molla di richiamo del latch riporta
+            # la leva a latch≈0. Solo quando |latch_qpos| è sotto soglia → rilascio pulito.
+            # Specchio della chiusura, che NON termina finché la leva non è neutra.
+            latch_neutral = abs(self._latch_qpos()) <= getattr(self.cfg, "retreat_latch_neutral_tol", 0.05)
             fingers_clear = self._prev_gripper_width > (handle_diam + self.cfg.retreat_clear_margin)
-            if getattr(self.cfg, "retreat_clean_release", True) and not fingers_clear:
+
+            # §1.26 — il ramo di accompagnamento leva è attivo SOLO entro un cap di step:
+            # superati, si procede comunque a rilascio+ritiro anche se la leva non è neutra
+            # (evita che il braccio resti aggrappato all'infinito quando la leva non torna a 0).
+            _latch_steps_ok = self._fsm.state.retreat_steps <= getattr(self.cfg, "retreat_latch_max_steps", 20)
+
+            if getattr(self.cfg, "retreat_latch_restore", True) and not latch_neutral and _latch_steps_ok:
+                # leva ancora ruotata: tieni la presa e congela il braccio (lascia agire la molla)
+                action[:-1] = 0.0
+                if self._prev_is_phys_closed:
+                    grip_floor = min(1.0, self._fsm.grip_thresh(handle_friction) + self.cfg.grip_lock_margin)
+                    action[-1] = max(float(action[-1]), grip_floor)
+                else:
+                    action[-1] = 1.0
+                self._retreat_ramp_step = 0
+            elif getattr(self.cfg, "retreat_clean_release", True) and not fingers_clear:
                 action[:-1] = 0.0      # congela il braccio
                 action[-1]  = -1.0     # gripper aperto → rilascio pulito
                 self._retreat_ramp_step = 0
@@ -350,6 +371,7 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
             curriculum_lvl = self.curriculum_level,
             is_physically_closed = is_phys_closed,
             action         = action,
+            latch_qpos     = latch_qpos,
             just_succeeded = just_succeeded,
             rs_done        = bool(rs_done),
             step_count     = self._step_count,
