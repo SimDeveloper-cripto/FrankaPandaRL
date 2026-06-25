@@ -126,6 +126,10 @@ class TrainConfigV2Open:
     # termine ratchet è il segnale GENUINO che "apre la porta" verso il goal. Senza,
     # la policy afferra ma non tira fino al goal (success plateau ~15%). Rif. close §1.10.C.
     w_pull_progress   : float = 300.0    # come phi_push_weight*... della chiusura (door_prog)
+    # §1.31 — saturazione del progresso al goal (specchio della chiusura, dove door_prog
+    # spinge verso 0 = fine-corsa e satura). Default OFF: preserva la baseline al 100% (§1.30).
+    # Attivare per l'A/B che mira a ridurre la deriva post-rilascio sui goal bassi (vedi §10.9).
+    pull_progress_cap_at_goal : bool = False
     w_pull_dist_3d    : float = 5.0      # non perdere la maniglia mentre tira
     w_pull_dist_z     : float = 15.0
     w_pull_grip_weak  : float = 2.0      # presa sotto soglia durante il PULL (dolce)

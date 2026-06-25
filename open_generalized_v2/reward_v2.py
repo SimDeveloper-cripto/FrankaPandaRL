@@ -160,13 +160,27 @@ class PotentialBasedRewardOpen:
             # _max_door_angle sale solo → oscillare avanti/indietro non ri-premia (anti-exploit).
             # È il segnale genuino R che definisce "apri la porta"; lo shaping Ng sopra
             # non ne sposta l'ottimo [Ng 1999]. Rif. close §1.10.C (door_prog).
+            #
+            # §1.31 — SATURAZIONE AL GOAL (opt-in, default OFF). Asimmetria con la chiusura:
+            # lì door_prog spinge verso 0 = fine-corsa del giunto, quindi il progresso SATURA
+            # al bersaglio per costruzione (non può superarlo). Qui invece premiava QUALSIASI
+            # apertura fino a eff_max (il cap), incentivando a SUPERARE il goal e spingere fino
+            # al cap. Per i goal bassi la porta finisce contro il cap e poi, al rilascio nel
+            # RETREAT, deriva indietro (la molla la richiama) → open_error finale ~0.05. Con la
+            # saturazione, il progresso premia solo fino a goal_angle (esatto specchio della
+            # chiusura: progresso verso il bersaglio, non oltre) → la porta è guidata AL goal,
+            # non oltre. Default OFF per preservare la baseline al 100% (§1.30): attivare per
+            # l'A/B e confrontare l'open_error FINALE sui goal bassi.
+            prog_angle = door_angle
+            if getattr(self.cfg, "pull_progress_cap_at_goal", False):
+                prog_angle = min(door_angle, goal_angle)
             if self._max_door_angle is None:
-                self._max_door_angle = door_angle
+                self._max_door_angle = prog_angle
             if gripper_action > grip_thresh:
-                delta = door_angle - self._max_door_angle
+                delta = prog_angle - self._max_door_angle
                 if delta > 0:
                     rew["door_prog"] = self.cfg.w_pull_progress * delta
-                    self._max_door_angle = door_angle
+                    self._max_door_angle = prog_angle
 
             # presa genuinamente debole durante il PULL (dolce, come §1.13 chiusura)
             if gripper_action < grip_thresh:
