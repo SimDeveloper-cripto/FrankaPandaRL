@@ -22,7 +22,7 @@ import json
 import numpy as np
 
 from _common import (find_repo_root, make_cfg, GeneralizedDoorEnv,
-                     results_dir, setup_matplotlib)
+                     results_dir, setup_matplotlib, json_default)
 
 find_repo_root()
 import robosuite as suite  # noqa: E402
@@ -212,7 +212,7 @@ def run(make_plots: bool = True, run_dir: str = "runs/close_gen") -> dict:
 
     outdir = results_dir("physics")
     with open(os.path.join(outdir, "physics_results.json"), "w") as f:
-        json.dump(out, f, indent=2)
+        json.dump(out, f, indent=2, default=json_default)
 
     if make_plots:
         plt = setup_matplotlib()

@@ -36,7 +36,7 @@ from collections import Counter
 import numpy as np
 
 from _common import (make_cfg, make_vec_env, load_model, rollout_episode,
-                     results_dir, setup_matplotlib, PHASE_NAMES, FAILURE_TYPES)
+                     results_dir, setup_matplotlib, PHASE_NAMES, FAILURE_TYPES, json_default)
 import stats_utils as S
 
 
@@ -226,9 +226,9 @@ def run(episodes: int = 200, curriculum: float = 1.0, run_dir: str = "runs/close
     cs = f"c{int(curriculum)}"
     for tag, summ, recs in [("det", det_sum, det), ("sto", sto_sum, sto)]:
         with open(os.path.join(outdir, f"metrics_{tag}_{cs}.json"), "w") as f:
-            json.dump(summ, f, indent=2)
+            json.dump(summ, f, indent=2, default=json_default)
         with open(os.path.join(outdir, f"episodes_{tag}_{cs}.json"), "w") as f:
-            json.dump([r.as_dict() for r in recs], f, indent=2)
+            json.dump([r.as_dict() for r in recs], f, indent=2, default=json_default)
     if make_plots_flag:
         print("Genero i grafici…")
         make_plots(det, det_sum, sto, sto_sum, outdir, curriculum)

@@ -32,7 +32,7 @@ import json
 import argparse
 import numpy as np
 
-from _common import make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib
+from _common import make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib, json_default
 import stats_utils as S
 
 
@@ -128,7 +128,7 @@ def run(n_episodes: int, curriculum: float, run_dir: str, deterministic: bool = 
     outdir = results_dir("robustness")
     cs = f"c{int(curriculum)}"
     with open(os.path.join(outdir, f"robustness_{cs}.json"), "w") as f:
-        json.dump(out, f, indent=2)
+        json.dump(out, f, indent=2, default=json_default)
 
     plt = setup_matplotlib()
     # curve 1D

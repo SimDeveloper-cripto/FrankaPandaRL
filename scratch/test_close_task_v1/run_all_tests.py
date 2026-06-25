@@ -37,7 +37,7 @@ import traceback
 
 # import robusto dei moduli locali (funziona da qualunque CWD)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import results_dir, REPO_ROOT, DEFAULT_RUN_DIR  # noqa: E402
+from _common import results_dir, REPO_ROOT, DEFAULT_RUN_DIR, json_default  # noqa: E402
 
 
 PRESETS = {
@@ -335,7 +335,7 @@ def main():
     # Salvataggio aggregato + report
     outdir = results_dir()
     with open(os.path.join(outdir, "run_meta.json"), "w") as f:
-        json.dump(meta, f, indent=2)
+        json.dump(meta, f, indent=2, default=json_default)
 
     # results JSON "snello" (senza i grossi array per-episodio)
     def slim(o):

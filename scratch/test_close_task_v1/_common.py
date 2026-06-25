@@ -20,11 +20,32 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 import contextlib
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 import numpy as np
+
+
+def json_default(o):
+    """Convertitore per json.dump: gestisce gli scalari/array numpy (int64, float64,
+    bool_, ndarray) che altrimenti non sono serializzabili (es. su numpy+py3.10)."""
+    if isinstance(o, np.integer):
+        return int(o)
+    if isinstance(o, np.floating):
+        return float(o)
+    if isinstance(o, np.bool_):
+        return bool(o)
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    return str(o)
+
+
+def dump_json(obj, path) -> None:
+    """json.dump robusto ai tipi numpy."""
+    with open(path, "w") as f:
+        json.dump(obj, f, indent=2, default=json_default)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

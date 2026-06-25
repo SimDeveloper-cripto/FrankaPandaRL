@@ -1,0 +1,112 @@
+{
+  "mode": "Eval (deterministica)",
+  "curriculum": 0.0,
+  "n_episodes": 200,
+  "success_rate": {
+    "point": 0.99,
+    "lo": 0.9642782382838231,
+    "hi": 0.9972533418664555,
+    "conf": 0.95
+  },
+  "true_success_rate": {
+    "point": 0.97,
+    "lo": 0.9361057075454807,
+    "hi": 0.9861796856598887,
+    "conf": 0.95
+  },
+  "length_iqm": {
+    "point": 109.57,
+    "lo": 108.91,
+    "hi": 110.3,
+    "conf": 0.95
+  },
+  "length_mean": 129.765,
+  "length_cvar_worst10": 307.1,
+  "min_door_iqm": {
+    "point": 0.0,
+    "lo": 0.0,
+    "hi": 0.0,
+    "conf": 0.95
+  },
+  "min_door_cvar_worst10": 0.0,
+  "max_phase_distribution": {
+    "1:REACH": 2,
+    "2:PUSH": 0,
+    "3:HOLD": 0,
+    "4:RETREAT": 198
+  },
+  "failure_breakdown": {
+    "SUCCESS": {
+      "count": 198,
+      "ci": {
+        "point": 0.99,
+        "lo": 0.9642782382838231,
+        "hi": 0.9972533418664555,
+        "conf": 0.95
+      }
+    },
+    "REACH timeout": {
+      "count": 2,
+      "ci": {
+        "point": 0.01,
+        "lo": 0.0027466581335444384,
+        "hi": 0.0357217617161768,
+        "conf": 0.95
+      }
+    },
+    "GRASP lost": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.018845326377266575,
+        "conf": 0.95
+      }
+    },
+    "PUSH timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.018845326377266575,
+        "conf": 0.95
+      }
+    },
+    "HOLD bounce / timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.018845326377266575,
+        "conf": 0.95
+      }
+    },
+    "RETREAT door bounce": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.018845326377266575,
+        "conf": 0.95
+      }
+    },
+    "RETREAT latch not neutral": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.018845326377266575,
+        "conf": 0.95
+      }
+    },
+    "RETREAT timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.018845326377266575,
+        "conf": 0.95
+      }
+    }
+  }
+}

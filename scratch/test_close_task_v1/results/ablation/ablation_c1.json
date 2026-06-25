@@ -1,0 +1,148 @@
+{
+  "curriculum": 1.0,
+  "n_episodes": 50,
+  "mode": "det",
+  "baseline_true_success": {
+    "point": 1.0,
+    "lo": 0.9286524008666414,
+    "hi": 1.0,
+    "conf": 0.95
+  },
+  "comparisons": {
+    "freeze_cond_latch": {
+      "true_success": {
+        "variant": 9,
+        "baseline": 50,
+        "n": 50,
+        "diff": {
+          "point": -0.8200000000000001,
+          "lo": -0.9022980732976583,
+          "hi": -0.6734927344270836,
+          "conf": 0.95
+        },
+        "fisher_p": 2.490931470404805e-19,
+        "cohens_h": -2.2652945924214523,
+        "fisher_p_holm": 9.96372588161922e-19
+      },
+      "length": {
+        "diff": {
+          "point": 328.88,
+          "lo": 292.5385,
+          "hi": 360.66049999999996,
+          "conf": 0.95
+        },
+        "welch_p": 3.690881759482693e-32,
+        "cohens_d": 3.637542342246306,
+        "prob_improvement": 0.9752
+      }
+    },
+    "hold_freeze": {
+      "true_success": {
+        "variant": 50,
+        "baseline": 50,
+        "n": 50,
+        "diff": {
+          "point": 0.0,
+          "lo": -0.07134759913335864,
+          "hi": 0.07134759913335864,
+          "conf": 0.95
+        },
+        "fisher_p": 1.0,
+        "cohens_h": 0.0,
+        "fisher_p_holm": 1.0
+      },
+      "length": {
+        "diff": {
+          "point": 2.3799999999999955,
+          "lo": -27.560000000000002,
+          "hi": 33.44149999999998,
+          "conf": 0.95
+        },
+        "welch_p": 0.8810298183672277,
+        "cohens_d": 0.030011098798468576,
+        "prob_improvement": 0.5002
+      }
+    },
+    "hold_freeze_grip": {
+      "true_success": {
+        "variant": 50,
+        "baseline": 50,
+        "n": 50,
+        "diff": {
+          "point": 0.0,
+          "lo": -0.07134759913335864,
+          "hi": 0.07134759913335864,
+          "conf": 0.95
+        },
+        "fisher_p": 1.0,
+        "cohens_h": 0.0,
+        "fisher_p_holm": 1.0
+      },
+      "length": {
+        "diff": {
+          "point": 0.0,
+          "lo": -29.6205,
+          "hi": 30.520999999999983,
+          "conf": 0.95
+        },
+        "welch_p": 1.0,
+        "cohens_d": 0.0,
+        "prob_improvement": 0.5
+      }
+    },
+    "wait_latch": {
+      "true_success": {
+        "variant": 3,
+        "baseline": 50,
+        "n": 50,
+        "diff": {
+          "point": -0.94,
+          "lo": -0.979385029651026,
+          "hi": -0.8153830823687769,
+          "conf": 0.95
+        },
+        "fisher_p": 4.64380767359492e-25,
+        "cohens_h": -2.6466585272488974,
+        "fisher_p_holm": 2.32190383679746e-24
+      },
+      "length": {
+        "diff": {
+          "point": 366.65999999999997,
+          "lo": 341.3190000000001,
+          "hi": 386.7,
+          "conf": 0.95
+        },
+        "welch_p": 4.333459427899755e-41,
+        "cohens_d": 6.133088822728951,
+        "prob_improvement": 0.9796
+      }
+    },
+    "override_grip": {
+      "true_success": {
+        "variant": 48,
+        "baseline": 50,
+        "n": 50,
+        "diff": {
+          "point": -0.040000000000000036,
+          "lo": -0.13460090687507031,
+          "hi": 0.03700146831771081,
+          "conf": 0.95
+        },
+        "fisher_p": 0.4949494949494949,
+        "cohens_h": -0.40271584158066176,
+        "fisher_p_holm": 1.0
+      },
+      "length": {
+        "diff": {
+          "point": 10.539999999999992,
+          "lo": -21.62100000000001,
+          "hi": 43.60299999999995,
+          "conf": 0.95
+        },
+        "welch_p": 0.5393294710507545,
+        "cohens_d": 0.12321166852349165,
+        "prob_improvement": 0.6322
+      }
+    }
+  }
+}

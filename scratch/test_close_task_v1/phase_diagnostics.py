@@ -25,7 +25,7 @@ import argparse
 import numpy as np
 
 from _common import (make_cfg, make_vec_env, load_model, rollout_episode,
-                     results_dir, setup_matplotlib)
+                     results_dir, setup_matplotlib, json_default)
 import stats_utils as S
 
 LATCH_TRANSITION_NEUTRAL = 0.15
@@ -144,7 +144,7 @@ def run(n_episodes: int, deterministic: bool, curriculum: float, run_dir: str,
         fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_T6_bounce_{m}_{cs}.png"), dpi=130); plt.close(fig)
 
     with open(os.path.join(outdir, f"phase_diag_{m}_{cs}.json"), "w") as f:
-        json.dump(out, f, indent=2)
+        json.dump(out, f, indent=2, default=json_default)
     print(f"Risultati in {outdir}")
     return out
 

@@ -28,7 +28,7 @@ import json
 import argparse
 import numpy as np
 
-from _common import make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib
+from _common import make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib, json_default
 from ablation_envs import VARIANTS
 import stats_utils as S
 
@@ -110,7 +110,7 @@ def run(n_episodes, curriculum, run_dir, deterministic=True, base_seed=50_000,
     outdir = results_dir("ablation")
     cs = f"c{int(curriculum)}"
     with open(os.path.join(outdir, f"ablation_{cs}.json"), "w") as f:
-        json.dump(out, f, indent=2)
+        json.dump(out, f, indent=2, default=json_default)
 
     # forest plot della differenza di true success
     plt = setup_matplotlib()
