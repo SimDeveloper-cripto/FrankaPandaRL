@@ -83,7 +83,15 @@ class TrainConfigV2Open:
     goal_frac_min     : float = 0.85
     goal_frac_max     : float = 1.00
     # tolleranza di "porta aperta al goal": |door_angle - goal_angle| <= open_tol_rad
-    open_tol_rad      : float = 0.03
+    # §1.29 — ALLARGATA da 0.03 a 0.05 (intervento GEOMETRICO, non di reward). Razionale fisico:
+    # il goal è vicino al cap, fuori equilibrio; la diagnosi su 20 episodi reali mostra che la
+    # porta RAGGIUNGE sempre il goal (open_error minimo ≈ 0.000) ma poi DERIVA indietro di
+    # 0.024–0.050 rad per effetto della molla, prima che la FSM consolidi HOLD_OPEN. Con tol=0.03
+    # la coda deterministica (alta frizione/massa, pose scomode) si ferma appena SOTTO soglia →
+    # eval ~75% mentre il rollout stocastico è 1.0. Coerenza con la chiusura: lì la finestra 0.03
+    # coincide con l'EQUILIBRIO (door≈0, deriva nulla); qui la finestra deve essere larga almeno
+    # quanto la deriva fisica reale. 0.05 rad (~2.9°) resta un "aperto al valore richiesto" stretto.
+    open_tol_rad      : float = 0.05
 
     # ── FSM a soglie adattive (§3.1) — SPECULARE alla chiusura ───────────────────
     # Soglia di chiusura del gripper per confermare la presa (REACH→PULL), adattiva
@@ -166,6 +174,16 @@ class TrainConfigV2Open:
 
     success_bonus    : float = 5.0
     action_smooth_alpha: float = 0.8
+    # §1.28 — STABILIZZAZIONE sul goal in HOLD_OPEN/RETREAT (copia FEDELE del blocco HOLD
+    # della chiusura v2 che fa 100% true success). Nella chiusura la porta arriva a door≈0 e
+    # ci RESTA ferma (door_end ±0.004) grazie a questi termini; nell'apertura mancavano del
+    # tutto (solo hold=1.0 piatto) → la porta arrivava al goal ma rimbalzava a ridosso di
+    # goal-tol (eval deterministico ~75% vs rollout ~100%, "bounce della porta"). Stessi pesi.
+    w_hold_bounce    : float = 20.0      # §1.29 DEPRECATO: combatte la molla fuori equilibrio (vedi reward HOLD_OPEN)
+    w_hold_veldamp   : float = 10.0      # §1.29 DEPRECATO: idem — non più applicato
+    w_hold_slip      : float = 5.0       # presa fisica persa in HOLD (chiusura: -5)
+    w_hold_drop_pen  : float = 10.0      # gripper che si apre in HOLD (chiusura: -10)
+    w_hold_dist      : float = 3.0       # maniglia che si allontana in HOLD (chiusura: -3)
     # §1.25 — LATCH MONITOR nel RETREAT (mirror di latch_ret della chiusura). Insegna ad
     # accompagnare la maniglia alla posizione di partenza PRIMA di staccarsi. Attivo SOLO
     # in RETREAT → non interferisce col task (apertura). Peso moderato come la chiusura (1.0).

@@ -69,6 +69,7 @@ class PotentialBasedRewardOpen:
         fsm_state,
         phase_consts,            # (REACH, PULL, HOLD_OPEN, RETREAT)
         door_angle    : float,
+        door_qvel     : float = 0.0,
         goal_angle    : float,
         door_min      : float,
         open_tol      : float,
@@ -178,17 +179,54 @@ class PotentialBasedRewardOpen:
                 rew["grip_contact"] = self.cfg.w_grip_contact * opening_progress
 
         elif ph == HOLD_OPEN:
-            rew["hold"] = 1.0
+            # §1.29 — HOLD PIATTO (REVERT del §1.28). LEZIONE FISICA DECISIVA: nella CHIUSURA
+            # il bersaglio door≈0 è il punto di EQUILIBRIO della porta (latch a riposo), quindi
+            # hold_bounce (−20·err) e hold_veldamp (−25·|qvel|) penalizzano uno scostamento che
+            # all'ottimo NON esiste → la policy può azzerarli e fa 100%. Nell'APERTURA il goal è
+            # vicino al cap, FUORI equilibrio: la molla ritira la porta di 0.024–0.050 rad in modo
+            # FISICAMENTE INEVITABILE. Copiare bounce/veldamp punisce la policy per la fisica →
+            # il rollout (1.0) crolla e l'eval scende. Diagnosi confermata su 20 episodi reali.
+            # Rimedio: tornare all'hold piatto (lo stato che dava rollout 1.0) e risolvere il
+            # residuo deterministico per via GEOMETRICA (open_tol allargato alla deriva fisica,
+            # vedi config_v2 open_tol_rad), NON con altre penalità. Rif. close §HOLD (equilibrio).
+            open_err = abs(goal_angle - door_angle)
+            is_open_ok = open_err < open_tol
+            # premio piatto quando la porta è al goal (entro tolleranza); fuori tolleranza una
+            # GUIDA dolce (peso 1) verso il goal — non una penalità che combatte la molla.
+            if is_open_ok:
+                rew["hold"] = 1.0
+            else:
+                rew["hold"] = -1.0 * open_err
+            # presa fisica persa (mirror hold_slip della chiusura)
+            if not is_physically_closed:
+                rew["hold_slip"] = -self.cfg.w_hold_slip
+            # comando gripper (mirror della chiusura)
             if gripper_action > grip_thresh:
                 rew["hold_grip"] = 1.0
+            else:
+                rew["hold_grip"] = -2.0 * abs(gripper_action - grip_thresh)
+            # anti-apertura del gripper (mirror hold_drop_pen della chiusura)
+            if gripper_action < 0.0:
+                rew["hold_drop_pen"] = -self.cfg.w_hold_drop_pen * abs(gripper_action)
+            # braccio fermo (mirror hold_act della chiusura)
             arm_norm = float(np.linalg.norm(action[:-1]))
             rew["hold_act"] = 1.0 if arm_norm < 0.05 else -2.0 * arm_norm
+            # non perdere la maniglia (mirror hold_dist della chiusura)
+            if dist_handle > 0.06:
+                rew["hold_dist"] = -self.cfg.w_hold_dist * (dist_handle - 0.06)
 
         elif ph == RETREAT:
-            rew["hold"] = 1.0
-            # penalizza la RICHIUSURA post-successo (specchio di w_door_regress della chiusura)
-            regress = max(0.0, prev_angle - door_angle)   # door_angle che cala = si richiude
-            rew["door_regress"] = -self.cfg.w_door_regress * regress
+            # §1.29 — monitor di stabilità sul goal nel RETREAT, ma SENZA i termini che
+            # combattono la molla (vedi nota HOLD_OPEN). Premia la porta che RESTA al goal
+            # mentre il braccio si sfila; usa open_tol (config) invece del 0.03 hardcoded.
+            open_err = abs(goal_angle - door_angle)
+            rew["hold"] = 1.0 if open_err < open_tol else 0.0
+            # penalizza la RICHIUSURA post-successo SOLO quando porta la porta SOTTO la finestra
+            # di successo (fallimento vero); la deriva fisica entro tolleranza è inevitabile e
+            # non va punita (mirror concettuale di w_door_regress, adattato al goal non-equilibrio).
+            if door_angle < goal_angle - open_tol:
+                regress = max(0.0, prev_angle - door_angle)   # door_angle che cala = si richiude
+                rew["door_regress"] = -self.cfg.w_door_regress * regress
 
             # §1.25 — LATCH MONITOR (mirror ESATTO di latch_ret della chiusura): penalizza
             # la leva ancora RUOTATA in ogni step del RETREAT. È il segnale APPRESO che

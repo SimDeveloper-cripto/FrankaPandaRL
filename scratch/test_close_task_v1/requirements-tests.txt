@@ -1,0 +1,7 @@
+# Dipendenze della suite di test (oltre a quelle già del progetto: robosuite, stable-baselines3, torch).
+numpy>=1.23
+scipy>=1.9
+matplotlib>=3.6
+# Opzionale: implementazione di riferimento delle metriche di Agarwal et al. 2021.
+# Non richiesta — IQM/bootstrap/prob-of-improvement sono implementati in stats_utils.py.
+# rliable>=1.0.8

@@ -157,6 +157,13 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
         a = float(self._rs_env.sim.data.qpos[self._door_hinge_qpos_adr])
         return float(np.clip(a, self._door_min, self._effective_max))
 
+    def _door_qvel(self) -> float:
+        # §1.28 — velocità angolare del cardine della porta. Letta dal DOF del cardine,
+        # simmetrica a _door_angle che legge il qpos dello stesso giunto. Serve al termine
+        # hold_veldamp (damping anti-rimbalzo) in HOLD_OPEN/RETREAT, mirror ESATTO della
+        # chiusura v2 (che osserva door_qvel e lo usa per fermare la porta sul bersaglio).
+        return float(self._rs_env.sim.data.qvel[self._door_hinge_dof_adr])
+
     def _latch_qpos(self) -> float:
         return float(self._rs_env.sim.data.qpos[self._latch_qpos_adr])
 
@@ -357,6 +364,7 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
             fsm_state      = self._fsm.state,
             phase_consts   = (PHASE_REACH, PHASE_PULL, PHASE_HOLD_OPEN, PHASE_RETREAT),
             door_angle     = door_angle,
+            door_qvel      = self._door_qvel(),
             goal_angle     = self._goal_angle,
             door_min       = self._door_min,
             open_tol       = self.cfg.open_tol_rad,

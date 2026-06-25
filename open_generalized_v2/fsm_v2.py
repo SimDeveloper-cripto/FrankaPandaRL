@@ -175,8 +175,15 @@ class AdaptiveFSMOpen:
 
         # ── PULL → HOLD_OPEN : porta aperta al goal (INVERSIONE vs chiusura) ──────
         elif s.phase == PHASE_PULL:
-            # apertura: door_angle deve aver RAGGIUNTO il goal (entro tolleranza)
-            opened_enough = (door_angle >= goal_angle - open_tol) and (gripper_action > 0.80)
+            # apertura: door_angle deve aver RAGGIUNTO il goal (entro tolleranza) MENTRE la
+            # presa è chiusa. §1.30 — il gate di presa usa la soglia ADATTIVA g_thresh (come
+            # REACH→PULL), NON il letterale 0.80 di prima. Diagnosi su 20 episodi reali: la
+            # porta raggiunge SEMPRE il goal (open_error min ≈ 0), ma il grip-lock §1.18 floora
+            # il comando a g_thresh + grip_lock_margin; per maniglie a bassa frizione questo
+            # vale ~0.75 < 0.80, quindi con il vecchio gate la transizione NON scattava e
+            # l'episodio restava bloccato in PULL fino all'orizzonte (8/20 falliti, tutti con
+            # floor < 0.80). Allineando il gate alle soglie adattive l'incoerenza sparisce.
+            opened_enough = (door_angle >= goal_angle - open_tol) and (gripper_action > g_thresh)
             if opened_enough:
                 s.phase = PHASE_HOLD_OPEN
                 s.hold_open_duration = 0
