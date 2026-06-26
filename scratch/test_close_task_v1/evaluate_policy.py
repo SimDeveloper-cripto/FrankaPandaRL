@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/evaluate_policy.py
+
 """
 evaluate_policy — Valutazione statisticamente rigorosa della policy (task di chiusura v1).
 
-Sostituisce/estende `eval_stats_close.py`. Differenze chiave rispetto all'originale,
-motivate dalla letteratura:
+Sostituisce/estende `eval_stats_close.py`.
 
   1. STIME A INTERVALLO, non point estimate. Il success rate è riportato con
      intervallo di Wilson; lunghezza ed angolo minimo con IQM + bootstrap CI.
@@ -20,7 +20,7 @@ motivate dalla letteratura:
      semi-ampiezza ~±0.03 (power analysis — Colas et al. 2018). Era 50.
 
 Output (in results/evaluate/):
-  • metrics_<mode>_c<curr>.json — tutte le metriche + intervalli
+  • metrics_<mode>_c<curr>.json  — tutte le metriche + intervalli
   • episodes_<mode>_c<curr>.json — record per-episodio (per analisi a valle)
   • plot_success.png, plot_phase_dist.png, plot_phase_time.png,
     plot_metric_distributions.png, plot_failure_breakdown.png, plot_bootstrap.png
@@ -35,16 +35,15 @@ from collections import Counter
 
 import numpy as np
 
-from _common import (make_cfg, make_vec_env, load_model, rollout_episode,
-                     results_dir, setup_matplotlib, PHASE_NAMES, FAILURE_TYPES, json_default)
+from _common import (make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib, PHASE_NAMES, FAILURE_TYPES, json_default)
 import stats_utils as S
 
 
 def run_eval(n_episodes: int, deterministic: bool, curriculum: float,
              run_dir: str, base_seed: int = 10_000):
-    cfg = make_cfg(run_dir=run_dir)
+    cfg           = make_cfg(run_dir=run_dir)
     venv, raw_env = make_vec_env(cfg, curriculum_level=curriculum)
-    model = load_model(cfg, venv)
+    model         = load_model(cfg, venv)
 
     records = []
     for i in range(n_episodes):
@@ -59,18 +58,18 @@ def run_eval(n_episodes: int, deterministic: bool, curriculum: float,
 
 
 def summarize(records, mode_name: str, curriculum: float) -> dict:
-    n = len(records)
-    succ = sum(r.success for r in records)
-    tsucc = sum(r.true_success for r in records)
-    lengths = [r.length for r in records]
+    n         = len(records)
+    succ      = sum(r.success for r in records)
+    tsucc     = sum(r.true_success for r in records)
+    lengths   = [r.length for r in records]
     min_doors = [r.min_door_angle for r in records]
 
-    sr = S.wilson_ci(succ, n)
-    tsr = S.wilson_ci(tsucc, n)
-    len_iqm = S.bootstrap_ci(lengths, "iqm")
+    sr       = S.wilson_ci(succ, n)
+    tsr      = S.wilson_ci(tsucc, n)
+    len_iqm  = S.bootstrap_ci(lengths, "iqm")
     door_iqm = S.bootstrap_ci(min_doors, "iqm")
 
-    fail_counts = Counter(r.failure_type for r in records)
+    fail_counts       = Counter(r.failure_type for r in records)
     failure_breakdown = {}
     for ft in FAILURE_TYPES:
         c = fail_counts.get(ft, 0)

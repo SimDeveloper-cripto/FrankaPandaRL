@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/phase_diagnostics.py
+
 """
 phase_diagnostics — Diagnostica delle fasi HOLD e RETREAT (task di chiusura v1).
 
@@ -24,15 +25,13 @@ import json
 import argparse
 import numpy as np
 
-from _common import (make_cfg, make_vec_env, load_model, rollout_episode,
-                     results_dir, setup_matplotlib, json_default)
+from _common import (make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib, json_default)
 import stats_utils as S
 
 LATCH_TRANSITION_NEUTRAL = 0.15
 
 
-def run(n_episodes: int, deterministic: bool, curriculum: float, run_dir: str,
-        base_seed: int = 30_000):
+def run(n_episodes: int, deterministic: bool, curriculum: float, run_dir: str, base_seed: int = 30_000):
     cfg = make_cfg(run_dir=run_dir)
     venv, raw_env = make_vec_env(cfg, curriculum_level=curriculum)
     model = load_model(cfg, venv)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/run_all_tests.py
+
 """
 run_all_tests — Orchestratore della suite di test scientifica (task di chiusura v1).
 
@@ -7,7 +8,7 @@ Lancia, in un solo comando, tutte le batterie di test e produce un report aggreg
 con metriche, intervalli di confidenza, grafici e bibliografia.
 
 Batterie eseguite:
-  1. physics_unit_tests  — proprietà fisiche deterministiche dell'env (no modello)
+  1. physics_unit_tests   — proprietà fisiche deterministiche dell'env (no modello)
   2. evaluate_policy      — valutazione rigorosa det+sto (Wilson CI, IQM, CVaR)
   3. phase_diagnostics    — diagnostica HOLD/RETREAT (T3–T6) con statistica
   4. robustness_analysis  — inviluppo operativo (success vs domain randomization)
@@ -32,6 +33,7 @@ import time
 import argparse
 import datetime
 import platform
+
 import subprocess
 import traceback
 

@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/physics_unit_tests.py
-"""
-physics_unit_tests — Test di proprietà FISICHE dell'ambiente (task di chiusura v1).
-
-Rifattorizza T1 (latch spring) e T2 (hinge damping) di `diag_phase34.py` in
-*property test* deterministici, con tolleranze esplicite ed esito PASS/FAIL, più
-due nuovi controlli sulla domain randomization (Tobin et al. 2017; Mehta et al. 2020).
-
-Sono test sull'AMBIENTE, non sulla policy: non richiedono il modello addestrato e sono
-deterministici (Henderson et al. 2018 — un test fisico deve dare sempre lo stesso esito).
-Compatibili con `pytest` (funzioni `test_*` con `assert`) e lanciabili standalone.
-
-Output (in results/physics/): physics_results.json, plot_latch_spring.png,
-plot_hinge_bounce.png, plot_friction_hist.png
-"""
 
 from __future__ import annotations
 
@@ -21,8 +7,7 @@ import os
 import json
 import numpy as np
 
-from _common import (find_repo_root, make_cfg, GeneralizedDoorEnv,
-                     results_dir, setup_matplotlib, json_default)
+from _common import (find_repo_root, make_cfg, GeneralizedDoorEnv, results_dir, setup_matplotlib, json_default)
 
 find_repo_root()
 import robosuite as suite  # noqa: E402
@@ -252,4 +237,5 @@ if __name__ == "__main__":
     ap.add_argument("--run-dir", type=str, default="runs/close_gen")
     ap.add_argument("--no-plots", action="store_true")
     args = ap.parse_args()
+
     run(make_plots=not args.no_plots, run_dir=args.run_dir)

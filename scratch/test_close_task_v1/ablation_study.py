@@ -1,25 +1,5 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/ablation_study.py
-"""
-ablation_study — Confronto controllato baseline vs interventi (task di chiusura v1).
-
-Unifica gli script `test_*.py` (varianti di logica HOLD/RETREAT) in un unico STUDIO DI
-ABLAZIONE con disegno appaiato e statistica appropriata:
-
-  • ogni variante e il baseline sono valutati sugli STESSI seed (stesse condizioni
-    iniziali) → confronto appaiato, minore varianza (Colas et al. 2018; Patterson 2024);
-  • il confronto del success rate usa il test esatto di Fisher + CI di Newcombe della
-    differenza di proporzioni; quello della lunghezza usa Welch + bootstrap CI;
-  • probability of improvement (Agarwal et al. 2021) per la lunghezza;
-  • correzione di Holm-Bonferroni dei p-value perché i confronti sono multipli
-    (k varianti vs 1 baseline) (Colas et al. 2019).
-
-NB: la policy è addestrata sul baseline; le varianti sono controllori deterministici
-applicati in valutazione. Lo studio dice quale intervento *post-policy* migliora il
-"true success" e di quanto, con incertezza.
-
-Output (in results/ablation/): ablation_<curr>.json + forest plot.
-"""
 
 from __future__ import annotations
 
@@ -28,9 +8,9 @@ import json
 import argparse
 import numpy as np
 
-from _common import make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib, json_default
-from ablation_envs import VARIANTS
 import stats_utils as S
+from ablation_envs import VARIANTS
+from _common import make_cfg, make_vec_env, load_model, rollout_episode, results_dir, setup_matplotlib, json_default
 
 
 def eval_variant(name, env_cls, n_episodes, curriculum, run_dir, deterministic, base_seed):
@@ -63,12 +43,12 @@ def run(n_episodes, curriculum, run_dir, deterministic=True, base_seed=50_000,
         data[name] = eval_variant(name, VARIANTS[name], n_episodes, curriculum,
                                   run_dir, deterministic, base_seed)
 
-    base = data["baseline"]
+    base   = data["baseline"]
     b_true = sum(r.true_success for r in base)
-    b_len = [r.length for r in base]
+    b_len  = [r.length for r in base]
 
     comparisons = {}
-    raw_pvals = []
+    raw_pvals   = []
     for name in variants:
         if name == "baseline":
             continue

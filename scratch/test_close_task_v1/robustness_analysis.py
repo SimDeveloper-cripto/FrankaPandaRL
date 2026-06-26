@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/robustness_analysis.py
+
 """
 robustness_analysis — Inviluppo operativo della policy (task di chiusura v1).
 

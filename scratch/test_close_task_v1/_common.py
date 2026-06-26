@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/_common.py
+
 """
 _common — Helper condivisi della suite di test (task di chiusura v1).
 
@@ -8,8 +9,7 @@ Responsabilità (un solo punto di verità per ognuna):
     così che gli script funzionino indipendentemente dalla cartella di lancio
     (riproducibilità — Henderson et al. 2018; Patterson et al. 2024);
   • costruzione dell'ambiente vettorizzato + VecNormalize e caricamento del modello SAC,
-    con le STESSE convenzioni dei test originali (runs/close_gen, best_model.zip,
-    vecnormalize.pkl);
+    con le STESSE convenzioni dei test originali (runs/close_gen, best_model.zip, vecnormalize.pkl);
   • un rollout di episodio *seedato* che raccoglie un record metrico ricco e,
     opzionalmente, tracce passo-passo per la diagnostica di fase.
 
@@ -22,15 +22,14 @@ import os
 import sys
 import json
 import contextlib
-from dataclasses import dataclass, field, asdict
+
 from typing import Optional
+from dataclasses import dataclass, field, asdict
 
 import numpy as np
 
 
 def json_default(o):
-    """Convertitore per json.dump: gestisce gli scalari/array numpy (int64, float64,
-    bool_, ndarray) che altrimenti non sono serializzabili (es. su numpy+py3.10)."""
     if isinstance(o, np.integer):
         return int(o)
     if isinstance(o, np.floating):
@@ -43,7 +42,6 @@ def json_default(o):
 
 
 def dump_json(obj, path) -> None:
-    """json.dump robusto ai tipi numpy."""
     with open(path, "w") as f:
         json.dump(obj, f, indent=2, default=json_default)
 
@@ -52,14 +50,8 @@ def dump_json(obj, path) -> None:
 # 1. Path / import robusti (niente dipendenza dalla CWD)
 # ─────────────────────────────────────────────────────────────────────────────
 def find_repo_root(start: Optional[str] = None) -> str:
-    """
-    Risale dalle cartelle genitore finché trova sia `config/` sia `close_generalized/`.
-    Fallback: due livelli sopra questo file (scratch/test_close_task_v1/ → root) e infine
-    la CWD. Inserisce in sys.path SIA la root SIA `close_generalized/` (quest'ultima serve
-    perché `env_gen.py` importa `from train_close import ...` in forma "piatta").
-    """
     here = os.path.abspath(start or os.path.dirname(__file__))
-    cur = here
+    cur  = here
     for _ in range(8):
         if os.path.isdir(os.path.join(cur, "config")) and os.path.isdir(
             os.path.join(cur, "close_generalized")
@@ -80,7 +72,7 @@ def find_repo_root(start: Optional[str] = None) -> str:
     return root
 
 
-REPO_ROOT = find_repo_root()
+REPO_ROOT       = find_repo_root()
 DEFAULT_RUN_DIR = "runs/close_gen"
 
 # Import del progetto (dopo aver sistemato sys.path)
@@ -94,7 +86,6 @@ from stable_baselines3.common.vec_env import (               # noqa: E402
 
 PHASE_NAMES = ["1:REACH", "2:PUSH", "3:HOLD", "4:RETREAT"]
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Costruzione ambiente + modello
 # ─────────────────────────────────────────────────────────────────────────────
@@ -102,26 +93,19 @@ def make_cfg(run_dir: str = DEFAULT_RUN_DIR, horizon: int = 500, **kw) -> TrainC
     return TrainConfig(run_dir=run_dir, num_envs=1, horizon=horizon, **kw)
 
 
-def make_vec_env(cfg: TrainConfig, curriculum_level: float = 1.0,
-                 env_cls=GeneralizedDoorEnv):
-    """
-    Costruisce DummyVecEnv([env_cls(cfg)]) + VecNormalize (eval: training=False,
-    norm_reward=False) caricando le statistiche da run_dir/vecnormalize.pkl.
-    `env_cls` permette di iniettare sottoclassi di ablazione (vedi ablation_study.py).
-    Ritorna (venv, raw_env).
-    """
+def make_vec_env(cfg: TrainConfig, curriculum_level: float = 1.0, env_cls = GeneralizedDoorEnv):
     def _init():
         env = env_cls(cfg)
         env.set_curriculum_level(curriculum_level)
         return env
 
-    venv = DummyVecEnv([_init])
+    venv    = DummyVecEnv([_init])
     vn_path = os.path.join(cfg.run_dir, "vecnormalize.pkl")
     if os.path.exists(vn_path):
         venv = VecNormalize.load(vn_path, venv)
-        venv.training = False
+        venv.training    = False
         venv.norm_reward = False
-    raw_env = venv.envs[0]  # VecEnvWrapper.__getattr__ inoltra a DummyVecEnv
+    raw_env = venv.envs[0]
     return venv, raw_env
 
 
@@ -153,16 +137,16 @@ def _hinge_dof(raw_env) -> Optional[int]:
 
 
 def read_physics(raw_env) -> dict:
-    """Stato fisico istantaneo (letto live, non dalla cache di robosuite)."""
-    sim = raw_env._rs_env.sim
-    door_qpos = float(sim.data.qpos[raw_env._rs_env.hinge_qpos_addr])
+    sim        = raw_env._rs_env.sim
+    door_qpos  = float(sim.data.qpos[raw_env._rs_env.hinge_qpos_addr])
     latch_qpos = float(sim.data.qpos[raw_env._rs_env.handle_qpos_addr])
-    dof = _hinge_dof(raw_env)
-    door_qvel = float(sim.data.qvel[dof]) if dof is not None else float("nan")
+    dof        = _hinge_dof(raw_env)
+    door_qvel  = float(sim.data.qvel[dof]) if dof is not None else float("nan")
 
     eef_site_id = raw_env._rs_env.robots[0].eef_site_id
-    site_id = (eef_site_id.get("right", list(eef_site_id.values())[0])
-               if isinstance(eef_site_id, dict) else eef_site_id)
+    site_id     = (eef_site_id.get("right", list(eef_site_id.values())[0])
+                    if isinstance(eef_site_id, dict) else eef_site_id)
+
     eef_pos = np.asarray(sim.data.site_xpos[site_id], float)
     if getattr(raw_env, "handle_geom_id", None) is not None:
         handle_pos = np.asarray(sim.data.geom_xpos[raw_env.handle_geom_id], float)
@@ -175,8 +159,7 @@ def read_physics(raw_env) -> dict:
 
 
 def realized_domain_params(raw_env) -> dict:
-    """Parametri di dominio effettivamente campionati per l'episodio corrente."""
-    sim = raw_env._rs_env.sim
+    sim    = raw_env._rs_env.sim
     door_x = float(sim.model.body_pos[raw_env.door_body_id][0])
     return dict(
         handle_friction=float(getattr(raw_env, "_current_handle_friction", float("nan"))),
@@ -186,7 +169,6 @@ def realized_domain_params(raw_env) -> dict:
 
 
 def phase_idx(raw_env) -> int:
-    """0=REACH, 1=PUSH, 2=HOLD, 3=RETREAT — dalla FSM dell'env (stato live)."""
     if getattr(raw_env, "_success_latched", False):
         return 3 if getattr(raw_env, "_ready_to_retreat", False) else 2
     if getattr(raw_env, "_grasp_phase", False):
@@ -195,12 +177,6 @@ def phase_idx(raw_env) -> int:
 
 
 def phase_idx_from_info(info: dict, fallback: int = 0) -> int:
-    """
-    Fase ricavata dal dict `info` (necessaria sullo step TERMINALE, quando DummyVecEnv
-    ha già auto-resettato l'env e lo stato live di raw_env è del nuovo episodio).
-    `info` distingue HOLD/RETREAT via is_success + ready_retreat; REACH/PUSH non sono
-    distinguibili da info → si usa `fallback` (l'ultima fase nota pre-terminale).
-    """
     if info.get("is_success", False):
         return 3 if info.get("ready_retreat", False) else 2
     return fallback
@@ -221,8 +197,7 @@ FAILURE_TYPES = [
 ]
 
 
-def classify_failure(max_phase_idx: int, dist_handle: float, door_angle: float,
-                     latch_qpos: float, is_success: bool) -> str:
+def classify_failure(max_phase_idx: int, dist_handle: float, door_angle: float, latch_qpos: float, is_success: bool) -> str:
     if is_success:
         return "SUCCESS"
     if max_phase_idx == 0:
@@ -245,23 +220,25 @@ def classify_failure(max_phase_idx: int, dist_handle: float, door_angle: float,
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass
 class EpisodeRecord:
-    success: bool                 # permissivo: ha raggiunto HOLD/RETREAT (info is_success)
+    success     : bool            # permissivo: ha raggiunto HOLD/RETREAT (info is_success)
     true_success: bool            # porta chiusa (|door|<0.03) E latch neutro (|latch|<0.08)
-    length: int
-    min_door_angle: float
-    max_phase: str
-    phase_times: dict
-    failure_type: str
-    door_end: float
-    latch_end: float
+    length      : int
+
+    min_door_angle : float
+    max_phase      : str
+    phase_times    : dict
+    failure_type   : str
+    door_end       : float
+    latch_end      : float
     handle_friction: float
-    handle_radius: float
-    door_x: float
-    seed: int
-    # tracce opzionali (riempite se collect_trace=True)
-    hold_action_norms: list = field(default_factory=list)
+    handle_radius  : float
+    door_x         : float
+    seed           : int
+
+    hold_action_norms : list = field(default_factory=list)
     retreat_wrist_rots: list = field(default_factory=list)
-    bounce_events: list = field(default_factory=list)
+    bounce_events     : list = field(default_factory=list)
+
     latch_at_transition: Optional[float] = None
 
     def as_dict(self) -> dict:
@@ -271,7 +248,6 @@ class EpisodeRecord:
 
 
 def seed_everything(seed: int, venv=None) -> None:
-    """Seed globale di numpy (la domain randomization usa np.random) + venv se possibile."""
     np.random.seed(seed)
     if venv is not None:
         with contextlib.suppress(Exception):
@@ -280,48 +256,40 @@ def seed_everything(seed: int, venv=None) -> None:
 
 def rollout_episode(venv, model, raw_env, deterministic: bool = True,
                     seed: int = 0, collect_trace: bool = False) -> EpisodeRecord:
-    """
-    Esegue UN episodio in modo riproducibile (seed → domain randomization fissata).
-    Lo stesso seed su env diversi (baseline vs ablazione) dà le STESSE condizioni
-    iniziali → confronto appaiato (Patterson et al. 2024).
-    """
     seed_everything(seed, venv)
-    obs = venv.reset()
-    # Parametri di dominio REALIZZATI: costanti nell'episodio, fissati al reset.
-    # Vanno letti ORA (l'env è appena resettato), non a fine episodio (dopo
-    # l'auto-reset di DummyVecEnv conterrebbero i valori del PROSSIMO episodio).
+    obs  = venv.reset()
     dom0 = realized_domain_params(raw_env)
 
     phase_time = {n: 0 for n in PHASE_NAMES}
-    max_phase = 0
-    steps = 0
-    min_door = np.inf
+    max_phase  = 0
+    steps      = 0
+    min_door   = np.inf
     prev_phase = 0
-    last_dist = float("nan")
+    last_dist  = float("nan")
+
     latch_at_transition = None
     hold_norms, wrist_rots, bounces = [], [], []
 
-    done = False
+    done  = False
     info0 = {}
     while not done:
         action, _ = model.predict(obs, deterministic=deterministic)
         obs, _r, dones, infos = venv.step(action)
-        done = bool(dones[0])
+
+        done  = bool(dones[0])
         info0 = infos[0]
         steps += 1
 
-        # Angolo porta dello step: info["door_angle"] è impostato dall'env PRIMA
-        # dell'eventuale auto-reset di DummyVecEnv → valido anche sullo step terminale.
         step_door = abs(float(info0.get("door_angle", np.inf)))
         if np.isfinite(step_door):
             min_door = min(min_door, step_door)
 
         if not done:
-            # Stato live valido: l'env non è stato resettato.
-            phys = read_physics(raw_env)
+            phys      = read_physics(raw_env)
             last_dist = phys["dist_handle"]
-            pidx = phase_idx(raw_env)
+            pidx      = phase_idx(raw_env)
             phase_time[PHASE_NAMES[pidx]] += 1
+
             max_phase = max(max_phase, pidx)
             if collect_trace:
                 a = np.asarray(action[0], float)
@@ -335,35 +303,36 @@ def rollout_episode(venv, model, raw_env, deterministic: bool = True,
                     latch_at_transition = phys["latch_qpos"]
             prev_phase = pidx
         else:
-            # Step terminale: raw_env già auto-resettato → uso info (stato terminale).
             pidx = phase_idx_from_info(info0, fallback=prev_phase)
             phase_time[PHASE_NAMES[pidx]] += 1
+
             max_phase = max(max_phase, pidx)
 
-    is_success = bool(info0.get("is_success", False))
-    door_end = float(info0.get("door_qpos", min_door))
-    latch_end = float(info0.get("latch_qpos", 0.0))
+    is_success   = bool(info0.get("is_success", False))
+    door_end     = float(info0.get("door_qpos",  min_door))
+    latch_end    = float(info0.get("latch_qpos", 0.0))
     true_success = is_success and abs(door_end) < 0.03 and abs(latch_end) < 0.08
 
     return EpisodeRecord(
-        success=is_success,
-        true_success=true_success,
-        length=steps,
-        min_door_angle=float(min_door),
-        max_phase=PHASE_NAMES[max_phase],
-        phase_times=phase_time,
-        failure_type=classify_failure(max_phase, last_dist,
+        success        = is_success,
+        true_success   = true_success,
+        length         = steps,
+        min_door_angle = float(min_door),
+        max_phase      = PHASE_NAMES[max_phase],
+        phase_times    = phase_time,
+        failure_type   = classify_failure(max_phase, last_dist,
                                       abs(door_end), latch_end, is_success),
-        door_end=door_end,
-        latch_end=latch_end,
-        handle_friction=dom0["handle_friction"],
-        handle_radius=dom0["handle_radius"],
-        door_x=dom0["door_x"],
-        seed=seed,
-        hold_action_norms=hold_norms,
-        retreat_wrist_rots=wrist_rots,
-        bounce_events=bounces,
-        latch_at_transition=latch_at_transition,
+        door_end        = door_end,
+        latch_end       = latch_end,
+        handle_friction = dom0["handle_friction"],
+        handle_radius   = dom0["handle_radius"],
+        door_x          = dom0["door_x"],
+        seed            = seed,
+
+        hold_action_norms   = hold_norms,
+        retreat_wrist_rots  = wrist_rots,
+        bounce_events       = bounces,
+        latch_at_transition = latch_at_transition,
     )
 
 
@@ -380,6 +349,7 @@ def results_dir(subdir: str = "") -> str:
 def setup_matplotlib():
     import matplotlib
     matplotlib.use("Agg")
+
     os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), "scratch"))
     import matplotlib.pyplot as plt
     return plt

@@ -1,30 +1,14 @@
 #!/usr/bin/env python3
 # scratch/test_close_task_v1/ablation_envs.py
-"""
-ablation_envs — Ambienti di INTERVENTO per lo studio di ablazione (task di chiusura v1).
 
-Ciascuna classe è una sottoclasse di `GeneralizedDoorEnv` che modifica in modo
-DETERMINISTICO il comportamento nelle fasi HOLD/RETREAT (o la condizione di latch del
-successo). Sono gli stessi interventi degli script `test_freeze_logic.py`,
-`test_hold_freeze.py`, `test_hold_freeze_grip.py`, `test_wait_logic.py`,
-`test_original_wait_logic.py`, `test_override_grip.py`, qui raccolti in un unico modulo
-per poterli confrontare in modo controllato (un solo fattore cambiato per volta —
-Patterson et al. 2024) sulla STESSA policy addestrata e sugli STESSI seed (confronto
-appaiato — Colas et al. 2018).
-
-NB scientifico: la policy è addestrata sull'env BASELINE; questi interventi agiscono
-solo in valutazione. Lo studio misura quindi l'effetto di un *controllore deterministico
-post-policy*, non un re-training. È esattamente ciò che testavano gli script originali.
-"""
 
 from __future__ import annotations
 
 import numpy as np
-
 from _common import GeneralizedDoorEnv
 
 _GRIPPER_CLOSE_THRESH = 0.65
-_GRIPPER_OPEN_THRESH = -0.85
+_GRIPPER_OPEN_THRESH  = -0.85
 
 
 def _eef_pos(env):
@@ -37,14 +21,13 @@ def _eef_pos(env):
 def _smooth(env, action):
     action = np.asarray(action, np.float32).copy()
     action = np.clip(action, -1.0, 1.0)
-    alpha = getattr(env.cfg, "action_smooth_alpha", 1.0)
+    alpha  = getattr(env.cfg, "action_smooth_alpha", 1.0)
     if alpha < 1.0:
         action = alpha * action + (1.0 - alpha) * env._prev_action
     return action
 
 
 def _finish_step(env, action, obs, rs_done, rs_info=None, gripper_for_latch=None):
-    """Parte comune dopo lo step robosuite: aggiorna FSM, reward, info."""
     door_angle = env._get_door_angle()
     prev_angle = float(env._prev_door_angle) if env._prev_door_angle is not None else door_angle
     env._prev_door_angle = door_angle
@@ -54,21 +37,22 @@ def _finish_step(env, action, obs, rs_done, rs_info=None, gripper_for_latch=None
         gate = True if gripper_for_latch is None else (gripper_for_latch > 0.80)
         if gate:
             env._success_latched = True
-            just_succeeded = True
+            just_succeeded       = True
 
-    is_success = env._success_latched
-    reward, terminated, truncated = env._calculate_reward(
-        action, obs, rs_done, door_angle, prev_angle, just_succeeded)
-    env._prev_action = action.copy()
+    is_success                    = env._success_latched
+    reward, terminated, truncated = env._calculate_reward(action, obs, rs_done, door_angle, prev_angle, just_succeeded)
+    env._prev_action              = action.copy()
 
-    door_qpos = float(env._rs_env.sim.data.qpos[env._rs_env.hinge_qpos_addr])
+    door_qpos  = float(env._rs_env.sim.data.qpos[env._rs_env.hinge_qpos_addr])
     latch_qpos = float(env._rs_env.sim.data.qpos[env._rs_env.handle_qpos_addr])
-    info = dict(rs_info or {})
-    info["is_success"] = is_success
-    info["door_angle"] = door_angle
-    info["door_qpos"] = door_qpos
-    info["latch_qpos"] = latch_qpos
-    info["ready_retreat"] = getattr(env, "_ready_to_retreat", False)
+
+    info                   = dict(rs_info or {})
+    info["is_success"]     = is_success
+    info["door_angle"]     = door_angle
+    info["door_qpos"]      = door_qpos
+    info["latch_qpos"]     = latch_qpos
+    info["ready_retreat"]  = getattr(env, "_ready_to_retreat", False)
+
     return env._flatten_obs(obs), reward, terminated, truncated, info
 
 
@@ -168,10 +152,10 @@ class OverrideGripDoorEnv(GeneralizedDoorEnv):
 
 # Registro nome → classe (BASELINE = env reale)
 VARIANTS = {
-    "baseline": GeneralizedDoorEnv,
+    "baseline"         : GeneralizedDoorEnv,
     "freeze_cond_latch": FreezeDoorEnv,
-    "hold_freeze": HoldFreezeDoorEnv,
-    "hold_freeze_grip": HoldFreezeGripDoorEnv,
-    "wait_latch": WaitDoorEnv,
-    "override_grip": OverrideGripDoorEnv,
+    "hold_freeze"      : HoldFreezeDoorEnv,
+    "hold_freeze_grip" : HoldFreezeGripDoorEnv,
+    "wait_latch"       : WaitDoorEnv,
+    "override_grip"    : OverrideGripDoorEnv,
 }

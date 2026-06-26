@@ -1,0 +1,103 @@
+{
+  "mode": "Train (stocastica)",
+  "curriculum": 1.0,
+  "n_episodes": 100,
+  "success_rate": {
+    "point": 1.0,
+    "lo": 0.9630065017930143,
+    "hi": 1.0,
+    "conf": 0.95
+  },
+  "true_success_rate": {
+    "point": 1.0,
+    "lo": 0.9630065017930143,
+    "hi": 1.0,
+    "conf": 0.95
+  },
+  "length_iqm": {
+    "point": 125.16,
+    "lo": 124.1,
+    "hi": 126.2,
+    "conf": 0.95
+  },
+  "length_mean": 127.43,
+  "length_cvar_worst10": 154.1,
+  "min_door_iqm": {
+    "point": 0.0,
+    "lo": 0.0,
+    "hi": 0.0,
+    "conf": 0.95
+  },
+  "min_door_cvar_worst10": 0.0,
+  "max_phase_distribution": {
+    "REACH": 0,
+    "PUSH": 0,
+    "HOLD": 0,
+    "RETREAT": 100
+  },
+  "failure_breakdown": {
+    "SUCCESS": {
+      "count": 100,
+      "ci": {
+        "point": 1.0,
+        "lo": 0.9630065017930143,
+        "hi": 1.0,
+        "conf": 0.95
+      }
+    },
+    "REACH timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "PUSH timeout / grasp lost": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "HOLD bounce / timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT door bounce": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT latch not neutral": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    }
+  }
+}

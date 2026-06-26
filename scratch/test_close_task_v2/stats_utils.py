@@ -60,6 +60,7 @@ from scipy import stats
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass
 class Interval:
+    """Stima puntuale + intervallo di confidenza (lo, hi) al livello `conf`."""
     point: float
     lo: float
     hi: float
@@ -75,6 +76,7 @@ class Interval:
 
 @dataclass
 class Comparison:
+    """Risultato di un confronto fra due gruppi (es. baseline vs ablazione)."""
     name_a: str
     name_b: str
     diff: Interval                 # differenza (a - b) con bootstrap CI
@@ -94,6 +96,14 @@ class Comparison:
 # Proporzioni (success rate) — intervallo di Wilson [G]
 # ─────────────────────────────────────────────────────────────────────────────
 def wilson_ci(successes: int, n: int, conf: float = 0.95) -> Interval:
+    """
+    Intervallo di confidenza di Wilson per una proporzione binomiale.
+
+    Da preferire al classico Wald (p ± z·sqrt(p(1-p)/n)) quando p è vicino a 0 o 1
+    o quando n è piccolo — esattamente il regime di un success rate ~100% su poche
+    decine di episodi. Per 50/50 successi Wald darebbe [1.0, 1.0] (intervallo nullo,
+    falsamente certo); Wilson restituisce un limite inferiore < 1 onesto. Rif. [G].
+    """
     if n <= 0:
         return Interval(float("nan"), float("nan"), float("nan"), conf)
     z = stats.norm.ppf(1.0 - (1.0 - conf) / 2.0)
@@ -105,6 +115,13 @@ def wilson_ci(successes: int, n: int, conf: float = 0.95) -> Interval:
 
 
 def required_n_for_proportion(p_expected: float, half_width: float, conf: float = 0.95) -> int:
+    """
+    Numero di episodi necessario perché il CI (Wald) di una proporzione abbia
+    semi-ampiezza `half_width`. Strumento di *power analysis* per pianificare quanti
+    episodi servono — non per scuse a posteriori. Rif. [B].
+
+    Esempio: per stimare un success rate ~0.95 con ±0.03 al 95% servono ~203 episodi.
+    """
     z = stats.norm.ppf(1.0 - (1.0 - conf) / 2.0)
     p = min(max(p_expected, 1e-6), 1 - 1e-6)
     return int(np.ceil((z * z * p * (1 - p)) / (half_width * half_width)))
@@ -114,6 +131,11 @@ def required_n_for_proportion(p_expected: float, half_width: float, conf: float 
 # Metriche robuste su campioni continui — IQM, bootstrap CI [A], CVaR [E]
 # ─────────────────────────────────────────────────────────────────────────────
 def iqm(samples: Sequence[float]) -> float:
+    """
+    Interquartile Mean: media del 50% centrale dei dati (scarta il 25% più basso e
+    il 25% più alto). Più robusta della media agli outlier e più efficiente della
+    mediana. Metrica aggregata raccomandata in [A].
+    """
     x = np.sort(np.asarray(samples, dtype=float))
     n = len(x)
     if n == 0:
@@ -125,6 +147,13 @@ def iqm(samples: Sequence[float]) -> float:
 
 
 def cvar(samples: Sequence[float], alpha: float = 0.1, lower_tail: bool = True) -> float:
+    """
+    Conditional Value at Risk: media della coda peggiore (frazione `alpha`).
+    Metrica di *rischio* in [E]: per la robotica cattura il caso peggiore
+    (es. l'episodio in cui la porta resta più aperta), non solo il caso medio.
+    `lower_tail=True` → media del 10% di valori più BASSI (peggio = valore basso,
+    es. min_door_angle dove vicino a 0 è bene → usare lower_tail=False).
+    """
     x = np.sort(np.asarray(samples, dtype=float))
     n = len(x)
     if n == 0:
@@ -149,6 +178,11 @@ def bootstrap_ci(
     conf: float = 0.95,
     seed: int = 0,
 ) -> Interval:
+    """
+    Intervallo di confidenza via bootstrap percentile (ricampionamento con
+    reinserimento). Non assume normalità — adatto a metriche asimmetriche come la
+    lunghezza d'episodio o il min_door_angle. Rif. [A] (stratified bootstrap), [B].
+    """
     x = np.asarray(samples, dtype=float)
     n = len(x)
     fn = _statistic_fn(statistic)
@@ -166,6 +200,7 @@ def bootstrap_ci(
 # Confronti fra due gruppi (baseline vs ablazione) [A][B][C][F]
 # ─────────────────────────────────────────────────────────────────────────────
 def cohens_d(a: Sequence[float], b: Sequence[float]) -> float:
+    """Effect size standardizzato per campioni continui (pooled std)."""
     a = np.asarray(a, float)
     b = np.asarray(b, float)
     na, nb = len(a), len(b)
@@ -177,6 +212,11 @@ def cohens_d(a: Sequence[float], b: Sequence[float]) -> float:
 
 
 def cliffs_delta(a: Sequence[float], b: Sequence[float]) -> float:
+    """
+    Cliff's delta: effect size non parametrico = P(a>b) - P(a<b) ∈ [-1, 1].
+    Robusto e adatto a metriche non normali. |δ|<0.147 trascurabile, <0.33 piccolo,
+    <0.474 medio, oltre grande (soglie di Romano et al. 2006).
+    """
     a = np.asarray(a, float)
     b = np.asarray(b, float)
     if len(a) == 0 or len(b) == 0:
@@ -187,6 +227,11 @@ def cliffs_delta(a: Sequence[float], b: Sequence[float]) -> float:
 
 
 def probability_of_improvement(a: Sequence[float], b: Sequence[float]) -> float:
+    """
+    P(a > b): probabilità che un campione di A superi uno di B (ties = 0.5).
+    Metrica di confronto raccomandata in [A] — interpretabile senza assunzioni
+    distribuzionali. Identica al concetto di "common-language effect size".
+    """
     a = np.asarray(a, float)
     b = np.asarray(b, float)
     if len(a) == 0 or len(b) == 0:
@@ -201,6 +246,11 @@ def compare_continuous(
     name_a: str = "A", name_b: str = "B",
     n_boot: int = 10_000, conf: float = 0.95, seed: int = 0,
 ) -> Comparison:
+    """
+    Confronto di due metriche continue (es. lunghezza d'episodio baseline vs ablazione):
+    test t di Welch (varianze diseguali, [B]) + bootstrap CI della differenza delle medie
+    + Cohen's d + probability of improvement [A].
+    """
     a = np.asarray(a, float)
     b = np.asarray(b, float)
     if len(a) >= 2 and len(b) >= 2:
@@ -208,7 +258,6 @@ def compare_continuous(
         p = float(t.pvalue)
     else:
         p = float("nan")
-
     rng = np.random.default_rng(seed)
     boots = np.array([
         np.mean(rng.choice(a, len(a), replace=True)) - np.mean(rng.choice(b, len(b), replace=True))
@@ -229,6 +278,11 @@ def compare_proportions(
     succ_a: int, n_a: int, succ_b: int, n_b: int,
     name_a: str = "A", name_b: str = "B", conf: float = 0.95,
 ) -> Comparison:
+    """
+    Confronto di due success rate (es. baseline vs ablazione): test esatto di Fisher
+    (robusto per n piccolo / proporzioni estreme) + Newcombe CI della differenza di
+    proporzioni (da due intervalli di Wilson) + Cohen's h come effect size.
+    """
     table = [[succ_a, n_a - succ_a], [succ_b, n_b - succ_b]]
     try:
         _, p = stats.fisher_exact(table)
@@ -255,6 +309,11 @@ def compare_proportions(
 
 
 def holm_bonferroni(p_values: Sequence[float]) -> list[float]:
+    """
+    Correzione di Holm-Bonferroni per confronti multipli (es. molte ablazioni vs un
+    baseline). Più potente di Bonferroni puro mantenendo il controllo del FWER.
+    Restituisce i p-value aggiustati nell'ordine originale. Rif. [C].
+    """
     p = np.asarray(p_values, float)
     m = len(p)
     order = np.argsort(p)
