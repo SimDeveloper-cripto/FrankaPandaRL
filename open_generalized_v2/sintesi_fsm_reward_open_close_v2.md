@@ -84,23 +84,29 @@ la direzione. Si aggiungono penalità per non perdere la maniglia e premio al ma
 del contatto.
 
 **Fase 2 — HOLD (chiusura) / HOLD_OPEN (apertura)** — stabilità al bersaglio. **Qui la
-simmetria si ROMPE**, ed è la lezione fisica più importante del progetto.
-- **Chiusura:** il bersaglio `door≈0` è il **punto di equilibrio** della porta. Usa un
+simmetria si ROMPE**, ed è la lezione fisica più importante del progetto. La causa vera è nel
+modello del simulatore (vedi §4): il cardine è hard-limitato a **[0, 0.4] rad**, ha
+`frictionloss` (attrito secco che tiene ferma la porta da sola) e **nessuna molla di richiamo**.
+- **Chiusura:** il bersaglio `door≈0` coincide col **fine-corsa inferiore** del giunto. Usa un
   blocco di stabilizzazione forte — `hold = 1 − err`, `hold_bounce = −20 × err`,
   `hold_veldamp = −25 × |door_qvel|` — che all'ottimo (`err≈0`, `qvel≈0`) vale **zero**:
-  non costa nulla, e porta la porta a `door_end ≈ ±0.004` ferma. Fa 100% true success.
-- **Apertura:** il goal alto è **fuori equilibrio** — la molla di richiamo ritira la porta
-  di 0.024–0.050 rad in modo *inevitabile*. Un tentativo (§1.28) di copiare `hold_bounce`/
-  `hold_veldamp` qui **regrediva** il rollout: quei termini punivano la policy per la fisica.
-  La soluzione (§1.29) è l'**hold piatto** (`hold = +1.0` entro tolleranza, guida dolce di
-  peso 1 fuori), **senza** bounce/veldamp, e chiudere il residuo deterministico per via
-  **geometrica**: `open_tol_rad = 0.05`, larga quanto la deriva fisica reale (la chiusura
-  "si permette" 0.03 perché 0.03 è la finestra attorno all'equilibrio, deriva nulla).
+  non costa nulla, e porta la porta a `door_end ≈ ±0.004` ferma (la tiene il fine-corsa + il
+  frictionloss). Fa 100% true success.
+- **Apertura:** il goal sta **sotto** il fine-corsa superiore (0.4). La porta non torna
+  indietro da sola (niente molla sul cardine), ma `door_prog` la premia fino al **limite 0.400**:
+  per i goal bassi finisce contro il limite e lì resta → `door_end` lontano dal goal. Un
+  tentativo (§1.28) di copiare `hold_bounce`/`hold_veldamp` qui **regrediva** il rollout: quei
+  termini punivano la policy per un offset/moto che il segnale di progresso stesso induceva.
+  La soluzione (§1.29) è l'**hold piatto** (`hold = +1.0` entro tolleranza, guida dolce di peso
+  1 fuori), **senza** bounce/veldamp, con `open_tol_rad = 0.05` largo quanto lo scarto reale
+  goal↔limite. La precisione `door_end ≈ goal` si recupera invece facendo **saturare il
+  progresso al goal** (§1.31, §4): così la policy lascia la porta al goal e il `frictionloss`
+  la tiene lì, esattamente come la chiusura la lascia a `0`.
 
-In comune restano i termini che **non** combattono la molla: presa mantenuta, anti-apertura
+In comune restano i termini che **non** combattono la fisica: presa mantenuta, anti-apertura
 del gripper, braccio fermo, maniglia vicina. La differenza è il bersaglio dell'errore
 (`|door_qpos|` chiusura vs `|door_angle − goal_angle|` apertura) **e** il fatto che i due
-termini di stabilizzazione vivono solo dove il bersaglio è un equilibrio.
+termini di stabilizzazione forti vivono solo dove il bersaglio coincide col fine-corsa.
 
 **Fase 3 — RETREAT (entrambi)** — rilascio e ritiro:
 - premio alla stabilità (la porta deve restare al bersaglio), penalità se il moto va nel
@@ -139,9 +145,59 @@ Stessa impalcatura (FSM a soglie adattive + reward potenziale invariante + overr
 deterministici nel RETREAT). L'apertura riusa quasi tutto della chiusura; cambiano solo il
 **verso** (ratchet che sale, progresso verso `goal_angle`), un **iperparametro di
 esplorazione** (`target_entropy` più alto, perché afferrare la maniglia di lato è più
-difficile da innescare) e tre soglie **riallineate alla fisica del bersaglio non-equilibrio**:
-la **terminazione** (porta aperta invece di latch neutro), la **tolleranza di successo**
-(`open_tol = 0.05`, larga quanto la deriva della molla — niente penalità anti-molla, §1.29) e
-il **gate di presa** `PULL→HOLD_OPEN` (`g_thresh` adattivo invece del letterale `0.80`, §1.30).
-La lezione trasversale: in un sistema adattivo, ogni soglia è funzione della fisica corrente,
-mai un numero copiato per simmetria.
+difficile da innescare) e tre soglie **riallineate alla fisica del bersaglio**: la
+**terminazione** (porta aperta invece di latch neutro), la **tolleranza di successo**
+(`open_tol = 0.05`, larga quanto lo scarto goal↔limite — niente penalità che combattano la
+fisica, §1.29) e il **gate di presa** `PULL→HOLD_OPEN` (`g_thresh` adattivo invece del
+letterale `0.80`, §1.30). La lezione trasversale: in un sistema adattivo, ogni soglia è
+funzione della fisica corrente (frizione, fine-corsa, frictionloss), mai un numero copiato
+per simmetria.
+
+---
+
+## 4. Adattamenti dovuti al simulatore (robosuite Door)
+
+Diverse scelte di progetto **non sono arbitrarie**: discendono dal modello MuJoCo della porta
+(`robosuite/models/assets/objects/door.xml`). Il cardine è definito così:
+
+```xml
+<joint name="hinge" axis="0 0 1" range="0.0 0.4"
+       damping="1" frictionloss="1" limited="true"/>
+```
+
+Tre proprietà fisiche del cardine, con le rispettive conseguenze su **entrambi** i task:
+
+| Proprietà del modello | Cosa implica | Adattamento nel codice (chiusura / apertura) |
+|----------------------|--------------|----------------------------------------------|
+| `range="0.0 0.4"`, `limited="true"` | La porta **non può** aprirsi oltre **0.4 rad (~23°)** né chiudersi sotto 0. Lo `0` e lo `0.4` sono **fine-corsa fisici**, non scelte di reward. | Il `door_open_cap_rad = 0.400` e `eff_max` dell'apertura **coincidono col limite reale**; il goal è campionato in `[0.85, 1.0] × 0.4`. La chiusura mira a `0` = fine-corsa inferiore. L'escursione massima osservata è *esattamente* 0.400 in ogni episodio: è il limite, non la policy. |
+| `frictionloss="1"` (attrito secco), **nessuno `stiffness`** | **Niente molla di richiamo sul cardine.** Quando la porta si ferma, **resta ferma da sola** (entro il cono d'attrito). NON torna indietro spontaneamente. | È ciò che permette a `door_end` di restare fermo *sia* a `0` (chiusura) *sia* al goal (apertura) **una volta che la policy ce la lascia**. La precisione non richiede di "tenere" la porta: richiede solo di **lasciarla al punto giusto** (vedi §1.31). |
+| `damping="1"` | Smorza la velocità del cardine: niente rimbalzi elastici, la porta si arresta dolcemente. | Rende **superfluo** un termine di velocity-damping nel reward; anzi, copiarlo dalla chiusura (`hold_veldamp`) nell'apertura **regrediva** (§1.29). |
+
+**Una correzione importante rispetto alle stesure precedenti.** La deriva residua dell'apertura
+(`open_error` finale ~0.05 sui goal bassi) era stata attribuita a una *molla* che "richiude" la
+porta. Il modello dice il contrario: **non c'è molla sul cardine**. Il meccanismo reale è che
+`door_prog` premia l'apertura fino al **fine-corsa 0.400**, quindi per i goal bassi la porta
+supera il goal, arriva al limite e — non avendo molla — vi **resta** (la tiene il `frictionloss`).
+`door_end = 0.400`, `open_error = |0.400 − goal|`: ~0.005 per goal alti, ~0.05 per i bassi.
+Conseguenza pratica: la precisione **si può** recuperare (non è un limite fisico), facendo
+saturare il progresso al goal (§1.31) così la policy lascia la porta al goal invece che al limite.
+
+**La molla, invece, c'è sul latch.** Con `use_latch=True` robosuite aggiunge un giunto al
+latch con la sua `stiffness`: è la maniglia che torna a neutro quando rilasciata. Questo è il
+motivo dell'accompagnamento leva nel RETREAT (`latch_restore` / `latch_ret`): si lascia che la
+molla **del latch** riporti la leva a 0 prima di staccarsi. È una molla reale — ma del latch,
+non del cardine.
+
+**Asimmetria del RETREAT, riletta alla luce del modello.**
+- *Chiusura:* rilascia a `door≈0` = fine-corsa inferiore + frictionloss → la porta resta a 0
+  "gratis", il latch torna neutro da solo (molla del latch) → terminazione su `latch < 0.08`.
+- *Apertura:* rilascia a un goal **sotto** il fine-corsa superiore. La porta resta dove la
+  policy la lascia (frictionloss), ma la leva **non** sempre si neutralizza (porta spalancata)
+  → niente gate sul latch in terminazione (causerebbe deadlock) e cap temporale
+  all'accompagnamento (`retreat_latch_max_steps`).
+
+In sintesi: gli unici "numeri magici" del progetto (cap 0.400, mira a 0, finestre di tolleranza,
+condizioni di terminazione) sono in realtà **lettura diretta del modello fisico** — fine-corsa
+`[0, 0.4]`, frictionloss che tiene ferma la porta, molla sul solo latch. Lo stesso schema FSM +
+reward machine funziona su chiusura e apertura proprio perché questi adattamenti sono ricavati
+dalla fisica, non incollati da un task all'altro.

@@ -894,28 +894,39 @@ nella chiusura — dal codice, non a memoria.
 (1) *rilascio pulito* — se le dita non sono libere, congela il braccio e apre il gripper a
 −1.0; (2) *rampa di avvio* morbida del ritiro; (3) *ritorno* a `retreat_pos`, azione azzerata
 quando è tornato. **Nessun termine "tiene" la porta.** Funziona perché a `door≈0` la porta è
-al suo **equilibrio di riposo**, contro il fine-corsa del giunto: rilasci e lei *resta*, il
-latch torna neutro da solo, `door_end` finisce a ±0.004 **per fisica, gratis**.
+contro il **fine-corsa inferiore** del giunto e il `frictionloss` la tiene ferma: rilasci e lei
+*resta*, il latch torna neutro da solo (molla del latch), `door_end` finisce a ±0.004 gratis.
 
-**Perché nell'apertura no (dai 20 episodi del run §1.30).** L'`open_error` *minimo* è sempre
-~0.000–0.02 (la porta centra il goal), ma il *finale* sale, e con una correlazione netta:
-goal **alti** (0.389–0.395) → finale 0.005–0.011; goal **bassi** (0.344–0.357) → finale
-0.04–0.05 (Ep19 0.0502, Ep20 0.0521, appena oltre tol). Il goal è **fuori equilibrio**:
-appena il gripper rilascia, la molla richiama la porta. Per i goal alti (≈ cap 0.400) il
-fine-corsa del giunto la trattiene → deriva ~0; per i goal bassi non c'è nulla a trattenerla.
+**La fisica reale, dal modello (`robosuite/models/assets/objects/door.xml`).** Il cardine è:
+`<joint name="hinge" range="0.0 0.4" damping="1" frictionloss="1" limited="true"/>`. Tre fatti
+che riscrivono la diagnosi (correzione rispetto alle stesure precedenti, che parlavano di
+"molla di richiamo" sul cardine — **non esiste**):
+- `range="0.0 0.4" limited="true"` → la porta è **hard-limitata a [0, 0.4] rad**: lo 0.4 è un
+  **fine-corsa fisico**, ed è perché l'escursione max è *esattamente* 0.400 in ogni episodio;
+- **nessuno `stiffness`** sul cardine → **niente molla**: la porta **non** torna indietro da
+  sola;
+- `frictionloss="1"` → attrito secco: quando la porta si ferma, **resta ferma** da sola.
+
+**Perché allora l'apertura ha la deriva (dai 20 episodi del run §1.30).** L'`open_error`
+*minimo* è ~0 (la porta *passa* per il goal salendo), ma il *finale* correla col goal: alti
+(0.389–0.395) → 0.005–0.011; bassi (0.344–0.357) → 0.04–0.05. Il meccanismo **non** è una molla
+che richiude: è che `door_prog` premia l'apertura fino al **fine-corsa 0.400**, quindi la porta
+supera il goal, arriva al limite e — non avendo molla — vi **resta** (la tiene il `frictionloss`).
+`door_end ≈ 0.400`, `open_error = |0.400 − goal|`: ~0.005 per goal alti, ~0.05 per i bassi. La
+causa è **nostra (il reward), non del simulatore** → è risolvibile.
 
 **L'asimmetria di `door_prog` (la causa a monte).** Confronto diretto dei ratchet:
 - chiusura: `delta = min_door_angle − door_angle` → spinge verso `0`, che **è** il fine-corsa
-  → il progresso **satura al bersaglio** per costruzione, non può superarlo;
-- apertura: `delta = door_angle − max_door_angle` → premia *qualsiasi* apertura fino a
-  `eff_max` (il cap), **senza fermarsi al goal**. La policy è incentivata a **superare** il
-  goal e spingere la porta fino al cap; per i goal bassi finisce contro il cap e poi, al
-  rilascio, deriva indietro.
+  inferiore → il progresso **satura al bersaglio** per costruzione, non può superarlo;
+- apertura: `delta = door_angle − max_door_angle` → premia *qualsiasi* apertura fino al
+  fine-corsa **0.400**, **senza fermarsi al goal**. La policy supera il goal e porta la porta
+  al limite; per i goal bassi `door_end` resta al limite, lontano dal goal.
 
 **Il lever §1.31 (opt-in, default OFF).** Si fa saturare anche l'apertura: il progresso premia
 solo fino a `goal_angle` (`prog_angle = min(door_angle, goal_angle)`), esatto specchio della
-chiusura. Così la porta è guidata **al** goal, non oltre. Implementato come flag
-`pull_progress_cap_at_goal` (default `False` per **preservare la baseline al 100%**, §1.30):
+chiusura. Così la policy **lascia la porta al goal** e il `frictionloss` la tiene lì — niente
+overshoot al limite. Implementato come flag `pull_progress_cap_at_goal` (default `False` per
+**preservare la baseline al 100%**, §1.30):
 ```python
 # reward_v2.py, PULL
 prog_angle = door_angle
@@ -924,16 +935,17 @@ if cfg.pull_progress_cap_at_goal:
 delta = prog_angle - self._max_door_angle      # ratchet anti-exploit invariato
 ```
 *Verifica offline:* con flag ON il `door_prog` oltre il goal vale 0 (saturato); con OFF premia
-fino al cap. *Da confermare col retraining A/B:* atteso `open_error` finale più piccolo e
-uniforme tra goal alti e bassi (i due episodi a 0.05 rientrano), senza toccare il 100%.
+fino al limite. *Da confermare col retraining A/B:* atteso `door_end ≈ goal` (anche sui goal
+bassi: i due episodi a 0.05 rientrano), senza toccare il 100%.
 
-> **Onestà metodologica.** Questo è l'unico punto in cui non posso garantire offline il
-> guadagno: la deriva post-rilascio dipende dalla fisica del simulatore (molla/fine-corsa),
-> non solo dalla logica. Per questo il lever è **opt-in** e va validato con un A/B (flag ON vs
-> OFF, stesso seed). Se la saturazione togliesse momentum utile a raggiungere i goal alti, la
-> si lascia OFF: la baseline §1.30 è già al 100% true-success entro tol. Lever alternativo,
-> ancora coerente e a costo zero di retraining-risk: `open_tol_rad = 0.06` (copre l'intera
-> deriva osservata, incl. la coda a 0.0521) — analogo diretto del §1.29.
+> **Onestà metodologica (aggiornata col modello).** Il modello conferma che la deriva NON è
+> fisica-irrisolvibile: senza molla sul cardine, la porta resta dove la policy la lascia
+> (frictionloss). L'unica incognita residua è se la policy **ri-addestrata** con `door_prog`
+> saturato si fermi pulita al goal invece di coastare al limite — questo dipende dalla dinamica
+> e va visto col run A/B (flag ON vs OFF, stesso seed). Se restasse un filo di overshoot per
+> inerzia, il lever successivo è il **freeze duro del braccio in HOLD_OPEN** (`action[:-1]=0`,
+> identico alla chiusura), che impedisce alla policy di spingere oltre il goal dopo la
+> transizione. La baseline §1.30 resta comunque al 100% true-success entro tol.
 
 ---
 
