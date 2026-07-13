@@ -64,6 +64,19 @@ class FSMStateOpen:
         self.target_hold_steps   = None
 
     @property
+    def one_hot(self) -> np.ndarray:
+        """§1.34 — [fsm_reach, fsm_pull, fsm_hold_open, fsm_retreat] ∈ {0,1}^4.
+        Mirror ESATTO della chiusura (FSMState.one_hot): è la feature che dice alla policy
+        IN CHE FASE È. Senza di essa lo stato fisico di HOLD_OPEN (tieni la maniglia) e di
+        RETREAT (molla e allontanati) è INDISTINGUIBILE per la policy — che quindi non può
+        imparare due comportamenti diversi nello stesso stato osservato: il braccio resta
+        attaccato alla maniglia. La chiusura ha sempre avuto questa feature nell'obs; nel
+        porting dell'apertura era andata persa."""
+        v             = np.zeros(4, dtype=np.float32)
+        v[self.phase] = 1.0
+        return v
+
+    @property
     def phase_name(self) -> str:
         return PHASE_NAMES.get(self.phase, "?")
 
@@ -102,6 +115,18 @@ class AdaptiveFSMOpen:
             + self.cfg.fsm_grasp_dist_k_radius * handle_radius
             + self.cfg.fsm_grasp_dist_offset
         )
+
+    @staticmethod
+    def rotate_quat_z_mujoco(quat_wxyz: np.ndarray, angle: float) -> np.ndarray:
+        """§1.33 — orientazione CORRENTE della porta: ruota il quaternione statico del modello
+        di `angle` attorno alla Z del mondo (l'asse del cardine è verticale). Necessario perché
+        `model.body_quat` è l'orientazione STATICA (porta chiusa): a porta aperta di θ la
+        normale vera è Rz(+θ)·n_statica (verificato in MuJoCo: match esatto con la xmat del
+        pannello; errore usando la statica a θ=0.35: 20.1°)."""
+        w, x, y, z = quat_wxyz
+        r = R_scipy.from_euler("z", float(angle)) * R_scipy.from_quat([x, y, z, w])
+        xq, yq, zq, wq = r.as_quat()
+        return np.array([wq, xq, yq, zq], dtype=float)
 
     @staticmethod
     def compute_retreat_pos(

@@ -210,7 +210,10 @@ class TrainConfigV2Open:
     # accompagnare la maniglia alla posizione di partenza PRIMA di staccarsi. Attivo SOLO
     # in RETREAT → non interferisce col task (apertura). Peso moderato come la chiusura (1.0).
     w_latch_ret          : float = 1.0
-    retreat_latch_term_tol: float = 0.08   # leva "a posto" per terminare (come chiusura)
+    retreat_latch_term_tol: float = 0.08   # §1.33: NON più gate di terminazione (misura MuJoCo:
+                                            # residuo leva ≈0.1/stiffness ∈ [0.05,0.20] a porta
+                                            # aperta → irraggiungibile per stiffness ≲1.0).
+                                            # Tenuto per diagnostica/retrocompatibilità.
 
     # ── Domain randomization estesa (§3.4) — sempre attiva ───────────────────────
     rand_latch_stiffness    : bool  = True

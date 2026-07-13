@@ -189,11 +189,16 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
             dq = None
         grasp_feats = self._grasp_strategy.obs_features(eef_quat, np.asarray(handle_pos), np.asarray(eef_pos), dq)
         physics_feats = self._domain_rand.obs_features()
+        # §1.34 — FASE FSM nell'osservazione (mirror ESATTO della chiusura, che la ha sempre
+        # avuta). Senza il one-hot la policy non può distinguere HOLD_OPEN (tieni) da RETREAT
+        # (molla e allontanati): stesso stato fisico, azioni ottime opposte → il braccio
+        # restava attaccato alla maniglia qualunque fosse il reward del RETREAT.
+        fsm_onehot = self._fsm.state.one_hot
         # feature di goal (apertura): goal normalizzato nel range effettivo
         goal_norm = np.array([
             (self._goal_angle - self._door_min) / (self._effective_max - self._door_min + 1e-8)
         ], dtype=np.float32)
-        return np.concatenate([base, grasp_feats, physics_feats, goal_norm], axis=0)
+        return np.concatenate([base, grasp_feats, physics_feats, fsm_onehot, goal_norm], axis=0)
 
     # ── reset ─────────────────────────────────────────────────────────────────────
 
@@ -329,7 +334,13 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
 
         prev_phase = self._fsm.state.phase
         try:
-            _door_quat = self._rs_env.sim.model.body_quat[self.door_body_id]
+            # §1.33 — orientazione CORRENTE della porta: model.body_quat è STATICA (porta
+            # chiusa); a porta aperta di door_angle la normale vera è ruotata di Rz(+door_angle)
+            # (misurato: 20.1° di errore a 0.35 rad usando la statica → il ritiro scivolava di
+            # lato, il dito restava sotto la leva e la bloccava). Nella CHIUSURA la statica va
+            # bene perché al RETREAT la porta È chiusa (door≈0 → correzione nulla).
+            _q_static  = self._rs_env.sim.model.body_quat[self.door_body_id]
+            _door_quat = self._fsm.rotate_quat_z_mujoco(_q_static, door_angle)
         except Exception:
             _door_quat = None
         fsm_events = self._fsm.update(

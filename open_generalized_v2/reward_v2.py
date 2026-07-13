@@ -284,26 +284,48 @@ class PotentialBasedRewardOpen:
             if door_angle < goal_angle - open_tol:
                 regress = max(0.0, prev_angle - door_angle)
                 rew["door_regress"] = -self.cfg.w_door_regress * regress
-
-            # §1.32 — STATO TERMINALE mirror ESATTO della chiusura (§1.14): retreat sostenuto
-            # + porta al bersaglio + LATCH NEUTRO. Il gate sul latch è raggiungibile ORA che il
-            # latch-restore è rimosso: si rilascia subito e la molla riporta la leva (prova:
-            # suite close T5, latch>0.15 alla transizione e terminazione a latch<0.08 sempre
-            # raggiunta). retreat_hard_cap: guardia SOLO-apertura per il caso limite in cui a
-            # porta spalancata la leva non rientrasse sotto tol — chiude comunque l'episodio.
-            if (getattr(self.cfg, "terminate_on_retreat_complete", True)
-                    and fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps
-                    and door_open_ok
-                    and (abs(latch_qpos) < self.cfg.retreat_latch_term_tol
-                         or fsm_state.retreat_steps >= getattr(self.cfg, "retreat_hard_cap", 70))):
-                rew["success_bonus"] = self.cfg.success_bonus
-                terminated = True
+            # (§1.33: la terminazione è spostata DOPO il calcolo di truncated, vedi sotto.
+            #  Il gate |latch|<tol è stato RIMOSSO dalla terminazione: misura MuJoCo sul
+            #  modello reale — la leva ha frictionloss=0.1 e damping=0, quindi il residuo di
+            #  equilibrio è ≈0.1/stiffness ∈ [0.05, 0.20] sul range randomizzato [0.5, 2.0]:
+            #  per stiffness ≲ 1.0 il residuo SUPERA 0.08 anche a leva perfettamente libera →
+            #  gate strutturalmente irraggiungibile in ~1/3 degli episodi → terminazioni al
+            #  solo hard-cap (71 esatti in 15/20 nel run §1.32). A porta CHIUSA il chiavistello
+            #  aggancia il montante (contatto misurato a hinge≈0.175) e assiste il ritorno:
+            #  per questo lo stesso gate nella chiusura funziona. latch_ret resta come segnale
+            #  di accompagnamento appreso.)
 
         # ── successo / terminazione ──
         if just_succeeded:
             rew["success_bonus"] = self.cfg.success_bonus
 
         truncated = bool(rs_done) or (step_count >= horizon)
+
+        # §1.33 — TERMINAZIONE SUL RITIRO COMPIUTO (sostituisce il gate latch, invalidato
+        # dalla misura fisica — vedi nota nel blocco RETREAT). Condizioni, tutte ATTUATE
+        # dalla policy e quindi sempre raggiungibili:
+        #   retreat sostenuto (≥ target) AND porta ancora al bersaglio AND presa RILASCIATA
+        #   AND braccio ARRIVATO al target di ritiro (dist < fsm_retreat_settle_dist).
+        # È l'esatto scopo del gate della chiusura (stato finale fisico del task) tradotto
+        # nello stato raggiungibile dell'apertura — ed è ciò che rende il ritiro VISIBILE.
+        # Guardia: al retreat_hard_cap l'episodio si chiude SEMPRE — successo se la porta è
+        # al bersaglio, TRONCATO senza bonus altrimenti (mai più episodi a orizzonte ~600).
+        if getattr(self.cfg, "terminate_on_retreat_complete", True) and ph == RETREAT:
+            door_open_ok_t = door_angle >= goal_angle - open_tol
+            sustained  = fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps
+            released_t = (not is_physically_closed)
+            rp_t = getattr(fsm_state, "retreat_pos", None)
+            arrived = (
+                rp_t is not None and eef_pos is not None
+                and float(np.linalg.norm(np.asarray(eef_pos, dtype=float) - rp_t))
+                    < self.cfg.fsm_retreat_settle_dist
+            )
+            hardcap = fsm_state.retreat_steps >= getattr(self.cfg, "retreat_hard_cap", 70)
+            if door_open_ok_t and ((sustained and released_t and arrived) or hardcap):
+                rew["success_bonus"] = self.cfg.success_bonus
+                terminated = True
+            elif hardcap:
+                truncated = True   # porta persa oltre il cap: chiudi comunque, nessun bonus
 
         reward = float(np.clip(sum(rew.values()), -50.0, 50.0))
         return reward, terminated, truncated, rew
