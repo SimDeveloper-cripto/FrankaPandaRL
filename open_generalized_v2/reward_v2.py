@@ -80,6 +80,7 @@ class PotentialBasedRewardOpen:
         dist_xy       : float = None,
         height_diff   : float = None,
         dist_retreat  : float,
+        eef_pos       : np.ndarray = None,
         target_steps  : int,
         curriculum_lvl: float,
         is_physically_closed: bool,
@@ -92,6 +93,7 @@ class PotentialBasedRewardOpen:
     ) -> Tuple[float, bool, bool, Dict[str, float]]:
         REACH, PULL, HOLD_OPEN, RETREAT = phase_consts
         rew: Dict[str, float] = {}
+        terminated = False
 
         # base: piccolo time-penalty (specchio della chiusura)
         rew["base"] = -0.10
@@ -230,47 +232,78 @@ class PotentialBasedRewardOpen:
                 rew["hold_dist"] = -self.cfg.w_hold_dist * (dist_handle - 0.06)
 
         elif ph == RETREAT:
-            # §1.29 — monitor di stabilità sul goal nel RETREAT, ma SENZA i termini che
-            # combattono la molla (vedi nota HOLD_OPEN). Premia la porta che RESTA al goal
-            # mentre il braccio si sfila; usa open_tol (config) invece del 0.03 hardcoded.
-            open_err = abs(goal_angle - door_angle)
+            # §1.32 — RETREAT: copia ESATTA del blocco della chiusura (stessi termini, stessi
+            # pesi), col solo bersaglio invertito (porta APERTA al goal invece che chiusa).
+            open_err     = abs(goal_angle - door_angle)
+            door_open_ok = door_angle >= goal_angle - open_tol
+
+            if getattr(fsm_state, "retreat_pos", None) is not None and eef_pos is not None:
+                _ep = np.asarray(eef_pos, dtype=float)
+                dist_to_target = float(np.linalg.norm(_ep - fsm_state.retreat_pos))
+            else:
+                dist_to_target = 0.20
+
+            # Gripper: apri per rilasciare la maniglia  [close: ret_grip]
+            if gripper_action < -0.85:
+                rew["ret_grip"] = 2.0
+            else:
+                rew["ret_grip"] = -1.0 * abs(gripper_action + 1.0)
+
+            # Torsione del polso  [close: ret_rot]
+            rew["ret_rot"] = -3.0 * float(np.linalg.norm(action[3:6]))
+
+            # Penalità laterale/verso il basso vicino alla maniglia  [close: ret_lat/ret_down]
+            if dist_handle < 0.12:
+                rew["ret_lat"] = -5.0 * abs(float(action[1]))
+                if float(action[2]) < 0:
+                    rew["ret_down"] = -5.0 * abs(float(action[2]))
+
+            # Guida direzionale verso retreat_pos, poi SETTLE  [close: ret_dir/ret_perp/
+            # ret_freeze/ret_release — §1.15 zona di settle allargata]
+            if getattr(fsm_state, "retreat_pos", None) is not None and eef_pos is not None:
+                if dist_to_target > self.cfg.fsm_retreat_settle_dist:
+                    dir_to_target    = fsm_state.retreat_pos - _ep
+                    dir_norm         = dir_to_target / (dist_to_target + 1e-6)
+                    action_alignment = float(np.dot(np.asarray(action[:3], dtype=float), dir_norm))
+                    rew["ret_dir"]  = 3.0 * action_alignment
+                    perp            = np.asarray(action[:3], dtype=float) - action_alignment * dir_norm
+                    rew["ret_perp"] = -2.0 * float(np.linalg.norm(perp))
+                else:
+                    # SETTLE: immobilizza il braccio (tutte le DOF tranne il gripper)
+                    rew["ret_freeze"] = -self.cfg.w_retreat_settle * float(np.linalg.norm(action[:-1]))
+                    # Rilascio pulito: bonus SOLO a porta APERTA + gripper aperto (mirror:
+                    # nella chiusura era door<0.03), così non ci si "accampa" a porta persa.
+                    if door_open_ok and gripper_action < -0.85:
+                        rew["ret_release"] = 1.0
+
+            # Latch monitor  [close: latch_ret]
+            rew["latch_ret"] = -self.cfg.w_latch_ret * abs(latch_qpos)
+
+            # Monitor stabilità porta nel retreat  [close: hold, con bersaglio invertito]
             rew["hold"] = 1.0 if open_err < open_tol else 0.0
-            # penalizza la RICHIUSURA post-successo SOLO quando porta la porta SOTTO la finestra
-            # di successo (fallimento vero); la deriva fisica entro tolleranza è inevitabile e
-            # non va punita (mirror concettuale di w_door_regress, adattato al goal non-equilibrio).
             if door_angle < goal_angle - open_tol:
-                regress = max(0.0, prev_angle - door_angle)   # door_angle che cala = si richiude
+                regress = max(0.0, prev_angle - door_angle)
                 rew["door_regress"] = -self.cfg.w_door_regress * regress
 
-            # §1.25 — LATCH MONITOR (mirror ESATTO di latch_ret della chiusura): penalizza
-            # la leva ancora RUOTATA in ogni step del RETREAT. È il segnale APPRESO che
-            # insegna ad accompagnare la maniglia alla posizione di partenza PRIMA di
-            # staccarsi, invece di rilasciare di colpo con la leva sotto tensione.
-            # Attivo SOLO in RETREAT (fase post-successo) → non può interferire con
-            # REACH/PULL/HOLD che portano al goal. Rif. close reward "latch_ret".
-            rew["latch_ret"] = -self.cfg.w_latch_ret * abs(latch_qpos)
+            # §1.32 — STATO TERMINALE mirror ESATTO della chiusura (§1.14): retreat sostenuto
+            # + porta al bersaglio + LATCH NEUTRO. Il gate sul latch è raggiungibile ORA che il
+            # latch-restore è rimosso: si rilascia subito e la molla riporta la leva (prova:
+            # suite close T5, latch>0.15 alla transizione e terminazione a latch<0.08 sempre
+            # raggiunta). retreat_hard_cap: guardia SOLO-apertura per il caso limite in cui a
+            # porta spalancata la leva non rientrasse sotto tol — chiude comunque l'episodio.
+            if (getattr(self.cfg, "terminate_on_retreat_complete", True)
+                    and fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps
+                    and door_open_ok
+                    and (abs(latch_qpos) < self.cfg.retreat_latch_term_tol
+                         or fsm_state.retreat_steps >= getattr(self.cfg, "retreat_hard_cap", 70))):
+                rew["success_bonus"] = self.cfg.success_bonus
+                terminated = True
 
         # ── successo / terminazione ──
         if just_succeeded:
             rew["success_bonus"] = self.cfg.success_bonus
 
-        terminated = False
         truncated = bool(rs_done) or (step_count >= horizon)
-
-        # §1.25 (CORRETTO) — terminazione allineata alla FISICA dell'apertura.
-        # LEZIONE: nella CHIUSURA la terminazione richiede latch<0.08 perché lì la porta va
-        # a door=0 e il latch SCATTA a zero da solo (stato di riposo naturale). Nell'APERTURA
-        # la porta resta APERTA al goal e la leva NON torna a zero da sola in quello stato:
-        # mettere latch<tol come gate di terminazione causa episodi che non finiscono mai
-        # (ep_len~580, ep_rew~-800, eval crolla). Quindi la terminazione torna alla condizione
-        # FISICAMENTE RAGGIUNGIBILE — porta aperta + retreat sostenuto, come la versione al 100%.
-        # L'accompagnamento della leva resta INSEGNATO dalla penalità latch_ret sopra (continua
-        # durante il RETREAT, identica alla chiusura): la policy impara a riportare la leva,
-        # ma se non arriva a zero perfetto l'episodio si chiude comunque (no deadlock).
-        if ph == RETREAT and fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps:
-            door_open_ok = door_angle >= goal_angle - open_tol
-            if door_open_ok:
-                terminated = True
 
         reward = float(np.clip(sum(rew.values()), -50.0, 50.0))
         return reward, terminated, truncated, rew

@@ -111,6 +111,15 @@ class TrainConfigV2Open:
     fsm_retreat_target_steps: int  = 30
     fsm_retreat_settle_dist : float = 0.06
     w_retreat_settle        : float = 20.0
+    # §1.32 — RITIRO ATTIVO speculare alla chiusura (parametri IDENTICI a close config):
+    # target di ritiro lungo la NORMALE della porta + guida direzionale nel reward +
+    # terminazione su latch neutro (raggiungibile ora che il latch-restore è rimosso).
+    terminate_on_retreat_complete: bool = True
+    fsm_retreat_dist  : float = 0.13   # [m] distanza di ritiro lungo la normale (= chiusura)
+    fsm_retreat_z_off : float = 0.04   # [m] offset verticale del target (= chiusura)
+    retreat_hard_cap  : int   = 70     # guardia anti-deadlock (solo apertura: leva a porta
+                                        # aperta — se in un caso limite non rientrasse sotto
+                                        # tol, l'episodio chiude comunque a porta aperta)
 
     # ── Reward potential-based (§3.2, Ng 1999) — SPECULARE ───────────────────────
     phi_reach_weight  : float = 25.0    # allineato alla chiusura v2 (bonus di grasp forte alla transizione REACH→PULL)
@@ -155,7 +164,16 @@ class TrainConfigV2Open:
     # molla di richiamo riporti la leva a latch≈0 (specchio della chiusura, che NON termina
     # finché |latch_qpos| non è sotto soglia). È motion-quality a successo già raggiunto →
     # deterministico, nessun retraining, nessun rischio per il reward che funziona.
-    retreat_latch_restore     : bool  = True
+    # §1.22/§1.26 → §1.32: DISATTIVATO. L'accompagnamento leva teneva la PRESA CHIUSA fino a
+    # retreat_latch_max_steps. Ma la leva non può tornare neutra MENTRE è impugnata → il ramo
+    # scadeva sempre al cap (20 step) con braccio CONGELATO → restavano ~3 step di rilascio + 8
+    # di rampa e la terminazione a contatore (30) scattava → il braccio non si ritirava MAI
+    # (RETREAT=31 esatti in 20/20 episodi del diagnostico). La suite della CHIUSURA (T5) prova
+    # che è l'approccio sbagliato: lì il latch è >0.15 al 100% delle transizioni HOLD→RETREAT,
+    # si rilascia SUBITO e la molla neutralizza la leva DURANTE il ritiro (termina a latch<0.08).
+    # Il deadlock storico di §1.25 (ep_len~580) era causato da QUESTO override (allora senza
+    # cap), non dal gate sul latch.
+    retreat_latch_restore     : bool  = False   # era True: causa-radice del mancato ritiro
     retreat_latch_neutral_tol : float = 0.05    # |latch_qpos| sotto cui la leva è "a posto"
     # §1.26 — CAP temporale dell'accompagnamento leva: la CHIUSURA può attendere la leva
     # perché lì il latch torna a 0 da solo; nell'APERTURA la leva può NON neutralizzarsi

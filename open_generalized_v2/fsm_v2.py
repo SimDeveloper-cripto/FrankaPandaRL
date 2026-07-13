@@ -28,6 +28,7 @@ from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional, List
+from scipy.spatial.transform import Rotation as R_scipy
 
 PHASE_REACH     = 0
 PHASE_PULL      = 1
@@ -102,6 +103,25 @@ class AdaptiveFSMOpen:
             + self.cfg.fsm_grasp_dist_offset
         )
 
+    @staticmethod
+    def compute_retreat_pos(
+        eef_pos         : np.ndarray,
+        door_quat_mujoco: np.ndarray,  # wxyz (MuJoCo)
+        retreat_dist    : float,
+        retreat_z       : float,
+    ) -> np.ndarray:
+        """§3.1/§1.32 — target di ritiro allineato alla NORMALE della porta (copia ESATTA di
+        close fsm_v2.compute_retreat_pos): eef + dist × door_normal + [0,0,z]. La normale è la
+        prima colonna della matrice di rotazione del corpo porta (asse X locale): punta verso
+        il robot, quindi è la direzione di allontanamento corretta a QUALSIASI yaw."""
+        w, x, y, z = door_quat_mujoco
+        door_mat    = R_scipy.from_quat([x, y, z, w]).as_matrix()
+        door_normal = door_mat[:, 0]
+        door_normal = door_normal / (np.linalg.norm(door_normal) + 1e-8)
+        retreat     = np.asarray(eef_pos, dtype=np.float32) + float(retreat_dist) * door_normal.astype(np.float32)
+        retreat[2] += float(retreat_z)
+        return retreat.astype(np.float32)
+
     def compute_target_hold_steps(self, control_freq, latch_stiffness, base_latch_stiffness):
         """
         Timer di HOLD_OPEN adattivo alla rigidità del latch (§3.1).
@@ -133,6 +153,8 @@ class AdaptiveFSMOpen:
         door_qpos        : float,
         latch_stiffness  : float,
         base_latch_stiffness: float,
+        eef_pos          : Optional[np.ndarray] = None,
+        door_quat_mujoco : Optional[np.ndarray] = None,
         wrist_align_ok   : bool = True,
         beta_probs       : Optional[dict] = None,
     ) -> List[str]:
@@ -206,6 +228,12 @@ class AdaptiveFSMOpen:
 
             hold_done = s.hold_open_duration >= s.target_hold_steps
             if hold_done:
+                # §1.32 — fissa il target di ritiro lungo la normale (mirror ESATTO chiusura)
+                if eef_pos is not None and door_quat_mujoco is not None:
+                    s.retreat_pos = self.compute_retreat_pos(
+                        eef_pos, door_quat_mujoco,
+                        self.cfg.fsm_retreat_dist, self.cfg.fsm_retreat_z_off,
+                    )
                 s.phase = PHASE_RETREAT
                 events.append(
                     f"HOLD_OPEN→RETREAT (dur={s.hold_open_duration}, "

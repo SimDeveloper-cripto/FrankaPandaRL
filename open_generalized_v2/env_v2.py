@@ -258,31 +258,18 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
 
         # ── §1.22 ACCOMPAGNA LEVA + §1.17 RILASCIO PULITO + §1.21 RAMPA in RETREAT ──
         elif phase == PHASE_RETREAT:
-            # §1.22 — PRIMA di rilasciare, accompagna la LEVA alla posizione di partenza
-            # (env-level, ZERO reward, NESSUNO step extra: si MODIFICA solo l'azione).
-            # Mantieni la presa e congela il braccio: la molla di richiamo del latch riporta
-            # la leva a latch≈0. Solo quando |latch_qpos| è sotto soglia → rilascio pulito.
-            # Specchio della chiusura, che NON termina finché la leva non è neutra.
-            latch_neutral = abs(self._latch_qpos()) <= getattr(self.cfg, "retreat_latch_neutral_tol", 0.05)
+            # §1.32 — RETREAT IDENTICO alla chiusura: rilascio pulito → rampa → ritorno a
+            # retreat_pos → azione azzerata quando arrivato. Il latch-restore è stato RIMOSSO:
+            # teneva la presa chiusa (la leva non può neutralizzarsi mentre è impugnata),
+            # congelava il braccio fino al cap e bruciava il budget del RETREAT → il braccio
+            # non si ritirava mai. La chiusura rilascia subito e la molla del latch riporta la
+            # leva a neutro DURANTE il ritiro (suite close, T5: latch>0.15 al 100% delle
+            # transizioni, terminazione a latch<0.08 sempre raggiunta).
             fingers_clear = self._prev_gripper_width > (handle_diam + self.cfg.retreat_clear_margin)
 
-            # §1.26 — il ramo di accompagnamento leva è attivo SOLO entro un cap di step:
-            # superati, si procede comunque a rilascio+ritiro anche se la leva non è neutra
-            # (evita che il braccio resti aggrappato all'infinito quando la leva non torna a 0).
-            _latch_steps_ok = self._fsm.state.retreat_steps <= getattr(self.cfg, "retreat_latch_max_steps", 20)
-
-            if getattr(self.cfg, "retreat_latch_restore", True) and not latch_neutral and _latch_steps_ok:
-                # leva ancora ruotata: tieni la presa e congela il braccio (lascia agire la molla)
-                action[:-1] = 0.0
-                if self._prev_is_phys_closed:
-                    grip_floor = min(1.0, self._fsm.grip_thresh(handle_friction) + self.cfg.grip_lock_margin)
-                    action[-1] = max(float(action[-1]), grip_floor)
-                else:
-                    action[-1] = 1.0
-                self._retreat_ramp_step = 0
-            elif getattr(self.cfg, "retreat_clean_release", True) and not fingers_clear:
-                action[:-1] = 0.0      # congela il braccio
-                action[-1]  = -1.0     # gripper aperto → rilascio pulito
+            if getattr(self.cfg, "retreat_clean_release", True) and not fingers_clear:
+                action[:-1] = 0.0      # congela il braccio (agisce solo il gripper)
+                action[-1]  = -1.0     # gripper completamente aperto → rilascio pulito
                 self._retreat_ramp_step = 0
             else:
                 # §1.21 — avvio morbido del ritiro (scala SOLO il braccio)
@@ -292,6 +279,16 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                     _scale = float(self._retreat_ramp_step + 1) / float(_R)
                     action[:-1] = action[:-1] * _scale
                     self._retreat_ramp_step += 1
+
+                # ritorno: quando il braccio è ARRIVATO al target di ritiro, azione azzerata
+                # (mirror ESATTO del blocco 'returned' della chiusura)
+                retreat_pos = self._fsm.state.retreat_pos
+                if retreat_pos is not None:
+                    _eef_now     = self._eef_pos()
+                    dist_retreat = float(np.linalg.norm(_eef_now - retreat_pos))
+                    returned     = dist_retreat < self.cfg.return_pos_tol
+                    if returned or self._fsm.state.return_hold >= self.cfg.return_hold_steps:
+                        action = np.zeros_like(action)
 
         self._prev_action = action.copy()
 
@@ -331,6 +328,10 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
         wrist_align_ok = True
 
         prev_phase = self._fsm.state.phase
+        try:
+            _door_quat = self._rs_env.sim.model.body_quat[self.door_body_id]
+        except Exception:
+            _door_quat = None
         fsm_events = self._fsm.update(
             door_angle           = door_angle,
             goal_angle           = self._goal_angle,
@@ -346,19 +347,36 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
             door_qpos            = door_qpos,
             latch_stiffness      = dr.current_latch_stiffness,
             base_latch_stiffness = dr.base_latch_stiffness or 1.0,
+            eef_pos              = eef_pos,
+            door_quat_mujoco     = _door_quat,
             wrist_align_ok       = wrist_align_ok,
             beta_probs           = None,
         )
 
         just_succeeded = (prev_phase == PHASE_PULL and self._fsm.state.phase == PHASE_HOLD_OPEN)
 
-        # retreat_pos: fissato all'ingresso in RETREAT (specchio chiusura)
+        # §1.32 — retreat_pos: fissato dalla FSM alla transizione HOLD_OPEN→RETREAT come
+        # back-off lungo la NORMALE della porta (compute_retreat_pos, mirror chiusura).
+        # Fallback robusto (quaternione mancante in quel frame): calcolo qui, stessa formula.
         if self._fsm.state.phase == PHASE_RETREAT and self._fsm.state.retreat_pos is None:
-            self._fsm.state.retreat_pos = self._start_eef_pos.copy()
+            if _door_quat is not None:
+                self._fsm.state.retreat_pos = self._fsm.compute_retreat_pos(
+                    eef_pos, _door_quat, self.cfg.fsm_retreat_dist, self.cfg.fsm_retreat_z_off)
+            else:
+                rp = np.asarray(eef_pos, dtype=np.float32) + np.array(
+                    [-self.cfg.fsm_retreat_dist, 0.0, self.cfg.fsm_retreat_z_off], dtype=np.float32)
+                self._fsm.state.retreat_pos = rp
         dist_retreat = (
             float(np.linalg.norm(eef_pos - self._fsm.state.retreat_pos))
             if self._fsm.state.retreat_pos is not None else 1.0
         )
+
+        # contatore return_hold: step consecutivi entro return_pos_tol (mirror chiusura)
+        if self._fsm.state.phase == PHASE_RETREAT and self._fsm.state.retreat_pos is not None:
+            if dist_retreat < self.cfg.return_pos_tol:
+                self._fsm.state.return_hold += 1
+            else:
+                self._fsm.state.return_hold = 0
 
         reward, terminated, truncated, rew_info = self._reward_fn.compute(
             fsm_state      = self._fsm.state,
@@ -375,6 +393,7 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
             dist_xy        = dist_xy,
             height_diff    = height_diff,
             dist_retreat   = dist_retreat,
+            eef_pos        = eef_pos,
             target_steps   = self._fsm.state.target_hold_steps or 30,
             curriculum_lvl = self.curriculum_level,
             is_physically_closed = is_phys_closed,
