@@ -67,9 +67,6 @@ mjpython close_generalized_v2/train_gen_v2.py --play --model runs/close_gen_v2_c
 
 # Add more steps to an already started Training
 ./.venv/bin/python close_generalized_v2/train_gen_v2.py --resume --total-steps <new_steps_count>
-
-# Beta Networks (MLP)
-mjpython close_generalized_v2/train_gen_v2.py --beta-net
 ```
 
 ---
@@ -81,9 +78,10 @@ mjpython close_generalized_v2/train_gen_v2.py --beta-net
 # Of course it works fine also on Windows11 and Linux
 
 # Train from scratch (only curr 1)
+# SR = 1 at 800k steps
 mjpython open_generalized_v2/train_curriculum_v2 --total-steps 1500000
 
-# Play
+# Play (only curr 1)
 mjpython open_generalized_v2/train_curriculum_v2 --play
 ```
 
@@ -92,5 +90,4 @@ mjpython open_generalized_v2/train_curriculum_v2 --play
 - [OK] Generalized Door Closing Task __runs/close_gen__
 - [OK] Generalization of the Generalized Door Closing Task (curr 0) __runs/close_gen_v2_curriculum_0_new_110626/__
 - [OK] Generalization of the Generalized Door Closing Task (curr 1) __runs/close_gen_v2_curriculum_1_new_110626/__
-
-- [ ] Generalization of the Generalized Door Opening Task (curr 1) __runs/open_gen_v2/__
+- [OK] Generalization of the Generalized Door Opening Task (curr 1) __runs/open_gen_v2/__

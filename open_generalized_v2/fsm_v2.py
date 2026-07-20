@@ -47,6 +47,7 @@ class FSMStateOpen:
     pull_steps           : int = 0
     hold_steps_total     : int = 0
     retreat_steps        : int = 0
+    retreat_free_steps   : int = 0   # §1.38: step di RETREAT dopo il rilascio delle dita
     return_hold          : int = 0
     retreat_pos          : Optional[np.ndarray] = None
     target_hold_steps    : Optional[int] = None
@@ -134,6 +135,7 @@ class AdaptiveFSMOpen:
         door_quat_mujoco: np.ndarray,  # wxyz (MuJoCo)
         retreat_dist    : float,
         retreat_z       : float,
+        door_pos        : Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """§3.1/§1.32 — target di ritiro allineato alla NORMALE della porta (copia ESATTA di
         close fsm_v2.compute_retreat_pos): eef + dist × door_normal + [0,0,z]. La normale è la
@@ -143,6 +145,22 @@ class AdaptiveFSMOpen:
         door_mat    = R_scipy.from_quat([x, y, z, w]).as_matrix()
         door_normal = door_mat[:, 0]
         door_normal = door_normal / (np.linalg.norm(door_normal) + 1e-8)
+
+        # §1.40 — ORIENTA la normale VERSO IL ROBOT invece di ASSUMERLO.
+        # La formula (condivisa con la chiusura) documenta: "this is the normal pointing
+        # toward the robot". MISURATO nell'env reale: e' FALSO. La normale punta a -Y, cioe'
+        # VIA dal robot, DENTRO la porta: retreat_pos finiva 13 cm PIU' VICINO alla maniglia
+        # (0.338 -> 0.210) invece che piu' lontano. Il "ritiro" ordinava al braccio di
+        # attraversare il pannello -> il braccio SPINGEVA la porta richiudendola e si bloccava.
+        # Nella CHIUSURA il difetto e' invisibile: li' la porta e' gia' a fine-corsa contro il
+        # telaio, spingerla non produce movimento. Nell'APERTURA la porta e' libera -> disastro.
+        # Fix: scegliere il verso col segno del prodotto scalare verso l'eef. Cosi' il codice
+        # fa ESATTAMENTE cio' che la sua docstring dichiara, per qualunque posa/yaw.
+        _eef = np.asarray(eef_pos, dtype=float)
+        if door_pos is not None:
+            if float(np.dot(door_normal, _eef - np.asarray(door_pos, dtype=float))) < 0.0:
+                door_normal = -door_normal
+
         retreat     = np.asarray(eef_pos, dtype=np.float32) + float(retreat_dist) * door_normal.astype(np.float32)
         retreat[2] += float(retreat_z)
         return retreat.astype(np.float32)
@@ -180,6 +198,7 @@ class AdaptiveFSMOpen:
         base_latch_stiffness: float,
         eef_pos          : Optional[np.ndarray] = None,
         door_quat_mujoco : Optional[np.ndarray] = None,
+        door_pos         : Optional[np.ndarray] = None,   # §1.40: per orientare la normale
         wrist_align_ok   : bool = True,
         beta_probs       : Optional[dict] = None,
     ) -> List[str]:
@@ -258,6 +277,7 @@ class AdaptiveFSMOpen:
                     s.retreat_pos = self.compute_retreat_pos(
                         eef_pos, door_quat_mujoco,
                         self.cfg.fsm_retreat_dist, self.cfg.fsm_retreat_z_off,
+                        door_pos=door_pos,
                     )
                 s.phase = PHASE_RETREAT
                 events.append(

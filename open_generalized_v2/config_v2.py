@@ -115,11 +115,105 @@ class TrainConfigV2Open:
     # target di ritiro lungo la NORMALE della porta + guida direzionale nel reward +
     # terminazione su latch neutro (raggiungibile ora che il latch-restore è rimosso).
     terminate_on_retreat_complete: bool = True
-    fsm_retreat_dist  : float = 0.13   # [m] distanza di ritiro lungo la normale (= chiusura)
-    fsm_retreat_z_off : float = 0.04   # [m] offset verticale del target (= chiusura)
-    retreat_hard_cap  : int   = 70     # guardia anti-deadlock (solo apertura: leva a porta
-                                        # aperta — se in un caso limite non rientrasse sotto
-                                        # tol, l'episodio chiude comunque a porta aperta)
+    fsm_retreat_dist  : float = 0.25   # §1.41 [m] MISURATO (era 0.13, copiato dalla chiusura).
+                                        # L'arretramento UTILE prima del freeze di settle e'
+                                        # (fsm_retreat_dist - fsm_retreat_settle_dist): con 0.13
+                                        # erano solo 7 cm. Misura nell'env reale su 4 seed della
+                                        # distanza necessaria a LIBERARE la leva incastrata fra
+                                        # le dita aperte: 0.026 / 0.025 / 0.128 / 0.080 m -> il
+                                        # fabbisogno VARIA con la randomizzazione (lunghezza e
+                                        # raggio maniglia, posa di presa) fino a 12.8 cm. Con 7 cm
+                                        # gli episodi facili si liberavano e quelli difficili si
+                                        # INCASTRAVANO (latch fermo a ~0.8-0.9, asintotico).
+                                        # 0.25 -> arretramento utile 0.19 m = +48% sul caso
+                                        # peggiore misurato. Raggiungibilita' verificata: il
+                                        # braccio arretra fino a 0.48 m.
+                                        # La chiusura usa 0.13 perche' li' la porta e' a
+                                        # fine-corsa e la geometria della leva e' diversa: la
+                                        # soglia segue la FISICA del task, non la simmetria.
+    fsm_retreat_z_off : float = 0.0    # §1.45 [m] — FUGA PURA LUNGO LA NORMALE. Tre run,
+                                        # tre esperimenti, una sola geometria compatibile:
+                                        #  +0.04 (=chiusura, run §1.42): il dito sale DENTRO
+                                        #    l'arco di ritorno della leva → leva appoggiata sul
+                                        #    dito (latch asintotico ~0.5), incastro a hard-cap.
+                                        #  -0.06 (§1.44, diag): il dito PREME la barra contro il
+                                        #    suo fine-corsa (ep.3/5: latch spinto a +1.5711=π/2
+                                        #    esatto, braccio inchiodato 7 mm/70 step) oppure,
+                                        #    quando si sfila, il pattino resta premuto sulla
+                                        #    barra per tutta l'uscita e TRASCINA la porta
+                                        #    (ep.1: door 0.400→0.217 con qvel -0.4 costante).
+                                        # La barra ruota in un piano PARALLELO al pannello:
+                                        # l'unica uscita che non la tocca mai e' perpendicolare
+                                        # a quel piano = normale della porta, z=0. Nella
+                                        # chiusura +0.04 resta corretto (leva gia' a riposo).
+    # §1.43 — ESCAPE GUIDATO post-rilascio (env-level, vedi env_v2.step, ramo RETREAT).
+    # Dopo il rilascio delle dita, il braccio è GUIDATO lungo la normale della porta finché
+    # (a) si è allontanato di retreat_escape_dist dal punto di presa, oppure (b) la leva è
+    # tornata neutra (|latch| ≤ retreat_latch_neutral_tol). Motivo (misurato, §1.41 + traccia
+    # §1.42): per liberare la leva servono fino a 0.128 m ma la policy si fermava a ~0.10 m →
+    # leva appoggiata sul dito, porta spinta dalla molla, terminazione solo a hard-cap.
+    # 0.15 m = caso peggiore misurato (0.128) + margine. Deterministico: nessun retraining
+    # necessario per validare (rilanciare diagnose_phase sulla policy esistente).
+    retreat_escape_enabled : bool  = True
+    retreat_escape_dist    : float = 0.15
+    retreat_escape_gain    : float = 5.0   # guadagno direzione→azione (come la mano guidata)
+    # §1.44 — USCITA ESOGENA GARANTITA (la ricetta §1.36/§1.37 capita fino in fondo, che
+    # faceva il 100% VERO). Il gate §1.42 sul latch rendeva la durata del RETREAT
+    # controllabile dalla policy (incastro = episodio infinito = farming del reddito
+    # per-step). L'episodio ora termina COMUNQUE a retreat_exo_exit_steps dal rilascio:
+    # la leva col z_off corretto torna in 3-8 step, quindi l'uscita normale resta
+    # (min_release=30 AND latch a casa); questa e' la RETE DI SICUREZZA non estendibile
+    # che azzera il valore del sabotaggio. Bonus solo a leva tornata (§1.43).
+    retreat_exo_exit_steps : int   = 60
+    # §1.46 — RIPORTO ATTIVO DELLA LEVA (env-level, deterministico). Diag §1.45: con
+    # z_off=0 la porta resta al goal (5/5) ma lo sfilamento sotto CARICO è friction-limited
+    # (molla a θ≈1.35 preme la barra sul dito; il braccio si arresta esponenzialmente a
+    # ~3.7 cm; leva a casa 0/5). Fix: a inizio RETREAT, PRESA ANCORA CHIUSA, l'eef è
+    # guidato lungo la tangente dell'arco della leva (v = -axis×r da MuJoCo xaxis/xanchor)
+    # finché |latch| ≤ retreat_restore_tol (max retreat_restore_max_steps): la molla si
+    # SCARICA prima dello stacco → rilascio ed escape senza carico. È il §1.22 fatto nel
+    # modo giusto: ATTIVO (il §1.22 congelava il braccio e aspettava → la leva non può
+    # tornare mentre è impugnata da un braccio fermo → deadlock → fu abbandonato).
+    retreat_restore_enabled  : bool  = True
+    retreat_restore_tol      : float = 0.35
+    retreat_restore_max_steps: int   = 40   # §1.47: era 20 — rate di riporto MISURATO
+                                             # ~0.034 rad/step: da fondo corsa (1.57) a
+                                             # tol (0.35) servono ~36 step; con 20 il
+                                             # riporto si fermava a meta' (leva a 0.75-0.9
+                                             # ancora carica) e lo sfilamento restava
+                                             # friction-limited negli episodi lenti.
+    retreat_restore_gain     : float = 2.0
+    # §1.48 — fallback MORSA→GABBIA del riporto. Con maniglie GROSSE (r≈0.025) la barra
+    # non può ruotare dentro la pinza chiusa (coppia d'attrito ∝ raggio; polso bloccato):
+    # il riporto non progredisce (ep.4 §1.47: 0.001 rad/step vs 0.034 degli altri). Se dopo
+    # retreat_restore_cage_after step il latch è sceso meno di retreat_restore_cage_progress,
+    # le dita si SEMIAPRONO a diam+margine: barra libera di ruotare nella gabbia, il dito
+    # la accompagna lungo l'arco spingendola. Gli episodi che progrediscono in morsa
+    # (4/5 nel diag §1.47) non cambiano comportamento.
+    retreat_restore_cage_after   : int   = 12
+    retreat_restore_cage_progress: float = 0.10
+    retreat_restore_cage_margin  : float = 0.015
+    # §1.49 — guadagno della rotazione del polso durante il riporto (moto rigido attorno
+    # all'asse del latch: traslazione tangente + rotazione coerente; con le rotazioni
+    # azzerate l'OSC teneva l'orientazione rigida e nelle pose scomode piantava il braccio).
+    retreat_restore_rot_gain     : float = 0.5
+    # §1.50 — la gabbia è la modalità PREDEFINITA del riporto (non più solo fallback):
+    # in morsa le dita scivolano dalla barra e la pinza si chiude a pugno nel vuoto
+    # (width 0.0012 misurata nel diag §1.49) trascinando la porta di ±0.13 rad.
+    retreat_restore_cage_always  : bool  = True
+    retreat_hard_cap  : int   = 120    # §1.46: 90→120 per far spazio ai ≤20 step di
+                                        # riporto leva. §1.44: era 200 — con l'incastro sistematico (§1.42/
+                                        # §1.43) il cap NON era piu' una guardia ma la DURATA
+                                        # DI FATTO del RETREAT: 200 step di reddito per-step
+                                        # (~+6/step con l'escape pagato) = jackpot ep_rew~500,
+                                        # con la policy che imparava a SABOTARE il rilascio
+                                        # per restarci. 90 = il valore che il commento §1.42
+                                        # gia' indicava come "solo guardia anti-deadlock".
+                                        # (§1.42): guardia anti-deadlock. La terminazione
+                                        # ora aspetta la LEVA tornata (come la chiusura):
+                                        # tempo di ritorno leva misurato 24-40 step.
+                                        # In caso patologico il cap chiude comunque a porta aperta.
+                                        # il cap 90 resta solo guardia anti-deadlock.
 
     # ── Reward potential-based (§3.2, Ng 1999) — SPECULARE ───────────────────────
     phi_reach_weight  : float = 25.0    # allineato alla chiusura v2 (bonus di grasp forte alla transizione REACH→PULL)

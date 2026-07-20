@@ -244,23 +244,48 @@ class PotentialBasedRewardOpen:
                 dist_to_target = 0.20
 
             # Gripper: apri per rilasciare la maniglia  [close: ret_grip]
-            if gripper_action < -0.85:
-                rew["ret_grip"] = 2.0
-            else:
-                rew["ret_grip"] = -1.0 * abs(gripper_action + 1.0)
+            # §1.37 — il premio +2 è RIPRISTINATO (era stato azzerato in §1.35/§1.36).
+            # LEZIONE DI ECONOMIA DELLA REWARD (dal collasso §1.36, SR 0.28, ep_rew +450):
+            # i redditi per-step formano un SISTEMA connesso. Togliere il reddito solo dalla
+            # FINE della catena (RETREAT) ha reso il limbo REACH/PULL — che ha i suoi redditi
+            # (w_reach_grip_near=2.5/step vicino alla maniglia, grip_contact in PULL) — la
+            # regione più pagata del task: la policy apriva la porta fino ad APPENA SOPRA la
+            # tolleranza (open_error min 0.0505–0.0811, tol 0.050: deliberato) e ci restava
+            # per 400+ step. Col reddito del RETREAT ripristinato, COMPLETARE torna a pagare
+            # più del limbo (come in tutti i run al 100%: §1.30, §1.34). Il reddito qui è
+            # sicuro SOLO perché l'uscita è ESOGENA a durata fissa (§1.36): non estendibile,
+            # quindi non farmabile — i 9 episodi perfetti del run §1.36 (RETREAT=31 pulito)
+            # lo confermano.
+            # §1.46 — durante il RIPORTO ATTIVO della leva (env-guided, presa chiusa per
+            # costruzione) i termini di rilascio/direzione sono SOSPESI: il braccio non è
+            # sotto controllo della policy, premiarlo o punirlo distorcerebbe il critic.
+            _restoring = bool(getattr(fsm_state, "retreat_restoring", False))
+            if not _restoring:
+                if gripper_action < -0.85:
+                    rew["ret_grip"] = 2.0
+                else:
+                    rew["ret_grip"] = -1.0 * abs(gripper_action + 1.0)
 
             # Torsione del polso  [close: ret_rot]
             rew["ret_rot"] = -3.0 * float(np.linalg.norm(action[3:6]))
 
-            # Penalità laterale/verso il basso vicino alla maniglia  [close: ret_lat/ret_down]
-            if dist_handle < 0.12:
-                rew["ret_lat"] = -5.0 * abs(float(action[1]))
-                if float(action[2]) < 0:
-                    rew["ret_down"] = -5.0 * abs(float(action[2]))
+            # §1.39 — ret_lat/ret_down (assi del MONDO) RIMOSSI dal RETREAT dell'apertura.
+            # MISURA: la porta ha yaw -90°, quindi la sua NORMALE — e con essa la direzione di
+            # ritiro — è al 94-99% lungo Y. `ret_lat = -5*|action[1]|` penalizzava dunque
+            # ESATTAMENTE la direzione di fuga, per tutti i 12 cm (dist_handle<0.12) necessari
+            # ad allontanarsi. Conto per step: ritirarsi = ret_dir(+3) + ret_lat(-4.69) +
+            # ret_grip(+2) + hold(+1) = +1.31 ; stare FERMO = +3.00 → alla policy conviene NON
+            # muoversi. Da qui: braccio che non si allontana, gripper aperto ma ancora sulla
+            # leva, latch bloccato a ~0.79 che non rientra (traccia reale: asintotico, mentre
+            # una leva LIBERA torna a <0.08 in 3-8 step).
+            # L'INTENTO della chiusura ("non spazzare di lato vicino alla maniglia") resta
+            # garantito da `ret_perp` (-2*||componente perpendicolare alla direzione di
+            # ritiro||): stessa penalità, ma espressa nel frame CORRETTO invece che su un asse
+            # del mondo che qui coincide con la via d'uscita.
 
             # Guida direzionale verso retreat_pos, poi SETTLE  [close: ret_dir/ret_perp/
             # ret_freeze/ret_release — §1.15 zona di settle allargata]
-            if getattr(fsm_state, "retreat_pos", None) is not None and eef_pos is not None:
+            if not _restoring and getattr(fsm_state, "retreat_pos", None) is not None and eef_pos is not None:
                 if dist_to_target > self.cfg.fsm_retreat_settle_dist:
                     dir_to_target    = fsm_state.retreat_pos - _ep
                     dir_norm         = dir_to_target / (dist_to_target + 1e-6)
@@ -279,7 +304,11 @@ class PotentialBasedRewardOpen:
             # Latch monitor  [close: latch_ret]
             rew["latch_ret"] = -self.cfg.w_latch_ret * abs(latch_qpos)
 
-            # Monitor stabilità porta nel retreat  [close: hold, con bersaglio invertito]
+            # Monitor stabilità porta nel retreat — §1.37: +1 RIPRISTINATO (vedi nota
+            # ret_grip: l'economia va tenuta intera; il reddito è sicuro con uscita esogena).
+            # Nota anti-trucco: "far cadere la porta per allungare fino al cap" NON paga —
+            # perde hold (+1 solo entro tol), paga door_regress e il calo del potenziale, e
+            # al cap arriva il TRONCAMENTO senza bonus.
             rew["hold"] = 1.0 if open_err < open_tol else 0.0
             if door_angle < goal_angle - open_tol:
                 regress = max(0.0, prev_angle - door_angle)
@@ -301,31 +330,54 @@ class PotentialBasedRewardOpen:
 
         truncated = bool(rs_done) or (step_count >= horizon)
 
-        # §1.33 — TERMINAZIONE SUL RITIRO COMPIUTO (sostituisce il gate latch, invalidato
-        # dalla misura fisica — vedi nota nel blocco RETREAT). Condizioni, tutte ATTUATE
-        # dalla policy e quindi sempre raggiungibili:
-        #   retreat sostenuto (≥ target) AND porta ancora al bersaglio AND presa RILASCIATA
-        #   AND braccio ARRIVATO al target di ritiro (dist < fsm_retreat_settle_dist).
-        # È l'esatto scopo del gate della chiusura (stato finale fisico del task) tradotto
-        # nello stato raggiungibile dell'apertura — ed è ciò che rende il ritiro VISIBILE.
-        # Guardia: al retreat_hard_cap l'episodio si chiude SEMPRE — successo se la porta è
-        # al bersaglio, TRONCATO senza bonus altrimenti (mai più episodi a orizzonte ~600).
+        # §1.36 — TERMINAZIONE ESOGENA A DURATA (la ricetta della chiusura, capita fino in
+        # fondo). Il gate d'arrivo di §1.33 era INOSSERVABILE: retreat_pos è ancorato al
+        # punto eef alla transizione HOLD_OPEN→RETREAT, che NON sta nell'osservazione — una
+        # policy senza memoria non può sapere quando è dentro una sfera di 6-8 cm attorno a
+        # un punto che non vede (run §1.34 e §1.35: RETREAT=71=cap in TUTTI gli episodi,
+        # CON e SENZA reddito → il gate non scattava mai, indipendentemente dagli incentivi).
+        # La chiusura non gata MAI sulla posizione: l'uscita è esogena. Qui uguale:
+        #   terminazione = retreat sostenuto (durata fissa, osservabile, non estendibile)
+        #                  AND porta ancora al bersaglio.
+        # Il ritiro VISIBILE non è imposto dalla terminazione ma PAGATO dal reward
+        # (ret_dir/ret_perp/ret_grip, con la policy che ora VEDE la fase, §1.34) — è
+        # esattamente il meccanismo per cui la chiusura si allontana.
+        # Guardia: al retreat_hard_cap l'episodio si chiude SEMPRE (successo se la porta è
+        # tornata al bersaglio, troncato senza bonus altrimenti).
         if getattr(self.cfg, "terminate_on_retreat_complete", True) and ph == RETREAT:
             door_open_ok_t = door_angle >= goal_angle - open_tol
-            sustained  = fsm_state.retreat_steps >= self.cfg.fsm_retreat_target_steps
-            released_t = (not is_physically_closed)
-            rp_t = getattr(fsm_state, "retreat_pos", None)
-            arrived = (
-                rp_t is not None and eef_pos is not None
-                and float(np.linalg.norm(np.asarray(eef_pos, dtype=float) - rp_t))
-                    < self.cfg.fsm_retreat_settle_dist
-            )
-            hardcap = fsm_state.retreat_steps >= getattr(self.cfg, "retreat_hard_cap", 70)
-            if door_open_ok_t and ((sustained and released_t and arrived) or hardcap):
-                rew["success_bonus"] = self.cfg.success_bonus
+            # §1.42 — TERMINAZIONE = RICETTA ESATTA DELLA CHIUSURA (reward close, righe 486-490:
+            #   retreat_steps >= target AND |door| < 0.03 AND |latch| < 0.08).
+            # La chiusura NON termina finché la LEVA non è tornata a posto: è PROPRIO questo che
+            # le da' il tempo di ritirarsi e di far rientrare la maniglia. L'apertura, dal §1.36,
+            # terminava a TEMPO (free_steps >= 30) per paura del deadlock — ma la traccia reale
+            # DIMOSTRA che a porta aperta la leva TORNA (scende lineare 1.57 -> ~0.88, ~0.023/step,
+            # pulita): non tornava a 0 solo perche' l'episodio chiudeva a meta' (step ~37) con la
+            # leva a 0.88 e il braccio a 7 cm. Ripristino il gate sul latch, adattando la sola
+            # condizione porta (aperta al goal invece di chiusa). Il free-steps resta come SOGLIA
+            # MINIMA (il rilascio deve essere iniziato); il gate vero e' la leva.
+            free_steps  = int(getattr(fsm_state, "retreat_free_steps", 0))
+            min_release = free_steps >= self.cfg.fsm_retreat_target_steps
+            latch_home  = abs(latch_qpos) < getattr(self.cfg, "retreat_latch_term_tol", 0.08)
+            hardcap     = fsm_state.retreat_steps >= getattr(self.cfg, "retreat_hard_cap", 120)
+            # §1.44 — uscita ESOGENA: oltre questa soglia post-rilascio l'episodio chiude
+            # ANCHE a leva non tornata (senza bonus). La durata del RETREAT smette di essere
+            # controllabile dalla policy → il reddito per-step non e' piu' farmabile
+            # tenendo la leva incastrata (run §1.43: ep_rew ~500 e sabotaggio appreso).
+            exo_exit    = free_steps >= int(getattr(self.cfg, "retreat_exo_exit_steps", 60))
+            # Task COMPIUTO quando la leva e' tornata a casa dopo il rilascio → termina.
+            # Il bonus dipende dalla porta ancora al goal; se e' calata chiudi comunque
+            # (niente deadlock) ma senza bonus — analogo alla guardia implicita della chiusura.
+            if (min_release and latch_home) or exo_exit or hardcap:
                 terminated = True
-            elif hardcap:
-                truncated = True   # porta persa oltre il cap: chiudi comunque, nessun bonus
+                # §1.43 — il BONUS solo a uscita PULITA (leva a casa dopo il rilascio).
+                # Prima il hard-cap pagava comunque il bonus a porta aperta → l'incastro
+                # della leva sul dito (RETREAT=201 in 5/5 episodi del diagnostico) risultava
+                # "successo" al 100% e il reddito per-step (§1.37: hold+1, ret_grip+2, …)
+                # rendeva il farming dell'incastro la strategia ottima. Col bonus vincolato
+                # alla leva neutra, completare il ritiro torna a dominare il limbo.
+                if door_open_ok_t and (min_release and latch_home):
+                    rew["success_bonus"] = self.cfg.success_bonus
 
         reward = float(np.clip(sum(rew.values()), -50.0, 50.0))
         return reward, terminated, truncated, rew

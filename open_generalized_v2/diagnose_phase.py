@@ -139,14 +139,28 @@ def run(episodes, model_path, use_random, open_gripper, scripted=False):
         open_err_final = None        # errore al goal a fine episodio
         success_ever = False         # is_success visto almeno una volta
         term_clean = False           # episodio terminato pulito (RETREAT completo)
+        last_retreat_steps = 0       # §1.43: per distinguere PULITA da HARD-CAP
+        last_latch = float("nan")
 
         done = False
         steps = 0
+        retreat_trace = []   # §1.38-diag: (rs, door_angle, door_qvel, gripper_width, latch)
         while not done:
             a = predict(obs)
             obs, r, term, trunc, info = env.step(a)
             done = bool(term or trunc)
             steps += 1
+            # §1.38-diag — traccia il RETREAT step-by-step: i 3 numeri che discriminano la
+            # causa del rimbalzo (velocità porta all'ingresso vs apertura gripper vs braccio).
+            if int(info["fsm_phase"]) == 3:
+                retreat_trace.append((
+                    int(info.get("retreat_steps", -1)),
+                    round(float(info.get("door_angle", float("nan"))), 4),
+                    round(float(info.get("door_qvel", float("nan"))), 4),
+                    round(float(info.get("gripper_width", float("nan"))), 4),
+                    round(float(info.get("latch_qpos", float("nan"))), 4),
+                    round(float(info.get("retreat_moved", 0.0)), 4),
+                ))
             _last["vec"] = info.get("vec_eef_to_handle", None)
             p = int(info["fsm_phase"])
             if bool(info.get("is_success", False)):
@@ -157,6 +171,8 @@ def run(episodes, model_path, use_random, open_gripper, scripted=False):
                 open_err_final = oe
             if done:
                 term_clean = bool(term)  # term=True → terminazione pulita; trunc → orizzonte
+                last_retreat_steps = int(info.get("retreat_steps", 0))
+                last_latch = float(info.get("latch_qpos", float("nan")))
             if steps == 1:
                 print(f"  [obs] handle_src={info.get('handle_src')}  "
                       f"eef_pos={info.get('eef_pos')}  handle_pos={info.get('handle_pos')}")
@@ -186,12 +202,37 @@ def run(episodes, model_path, use_random, open_gripper, scripted=False):
               f"{'RAGGIUNTA' if dist_min < d_thresh else 'MAI sotto soglia'}")
         if reach_samples:
             print(f"  → primi campioni REACH (gw, dist, grip_act): {reach_samples}")
+        # §1.43/§1.45 — distingui i TRE esiti di terminazione (prima incastro e uscita
+        # esogena venivano stampati come "PULITA"):
+        #   PULITA   = leva tornata a casa (|latch| < tol) → il ritiro è riuscito davvero
+        #   ESOGENA  = rete di sicurezza a retreat_exo_exit_steps: episodio chiuso ma leva
+        #              NON tornata → il rilascio è ancora da sistemare
+        #   HARD-CAP = guardia estrema
+        _cap = int(getattr(env.cfg, "retreat_hard_cap", 90))
+        _ltol = float(getattr(env.cfg, "retreat_latch_term_tol", 0.08))
+        if term_clean and last_retreat_steps >= _cap:
+            _term_lbl = f"HARD-CAP ({last_retreat_steps} step, latch={last_latch:+.3f} → INCASTRO leva)"
+        elif term_clean and abs(last_latch) < _ltol:
+            _term_lbl = f"PULITA (RETREAT completo in {last_retreat_steps} step, latch={last_latch:+.3f})"
+        elif term_clean:
+            _term_lbl = (f"ESOGENA ({last_retreat_steps} step, latch={last_latch:+.3f} → "
+                         f"leva NON tornata, rilascio da sistemare)")
+        else:
+            _term_lbl = "troncata a orizzonte"
         print(f"  → SUCCESS (is_success visto)? {'SÌ' if success_ever else 'NO'}   "
-              f"terminazione: {'PULITA (RETREAT completo)' if term_clean else 'troncata a orizzonte'}")
+              f"terminazione: {_term_lbl}")
         oem = f"{open_err_min:.4f}" if open_err_min < 1e8 else "n/d"
         oef = f"{open_err_final:.4f}" if open_err_final is not None else "n/d"
         print(f"  → open_error: minimo={oem}  finale={oef}  (tol={env.cfg.open_tol_rad:.3f})  "
               f"→ {'porta ARRIVATA al goal' if open_err_min <= env.cfg.open_tol_rad else 'goal MAI centrato entro tol'}")
+        # §1.38-diag — traccia RETREAT: rs | door | door_qvel | gripper_width | latch
+        if retreat_trace:
+            d0 = retreat_trace[0][1]
+            dmin = min(t[1] for t in retreat_trace)
+            print(f"  → RETREAT trace (door0={d0:.3f}  door_min={dmin:.3f}  RIMBALZO={d0-dmin:.4f}):")
+            print(f"       rs | door_angle | door_qvel | grip_width | latch    | ARRETRATO")
+            for (rs, da, dv, gw2, lq, mv) in retreat_trace:
+                print(f"      {rs:3d} |   {da:6.4f}  |  {dv:+7.4f} |   {gw2:6.4f}  | {lq:+.4f} |  {mv:.4f} m")
 
     env.close()
     print("\n=== LETTURA (policy addestrata) ===")
