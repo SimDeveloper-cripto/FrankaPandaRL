@@ -320,6 +320,17 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
             # il braccio arretra davvero (l'unica variabile che mancava alla traccia).
             if getattr(self, "_retreat_eef0", None) is None:
                 self._retreat_eef0 = self._eef_pos().copy()
+            # §1.51 — GUARDIA DI VELOCITÀ DELLA PORTA (anti-bounce, sicurezza). Se la porta
+            # sta muovendo (|dθ/dt| oltre una piccola soglia) l'azione cartesiana INIETTATA
+            # dall'env (riporto/escape) viene SCALATA giù fino a un pavimento: il braccio
+            # "molla" invece di inseguire e la porta non entra in avanti-indietro. La
+            # traccia post-training mostra lo spike da spezzare (door_qvel −0.54 a rs1).
+            # _door_qvel() legge la velocità del cardine PRIMA dello step → reagisce al
+            # movimento in corso. Vale sia in riporto sia in escape (stesso frame OSC).
+            _qv_ref  = float(getattr(self.cfg, "retreat_door_qvel_ref", 0.15))
+            _qv_flr  = float(getattr(self.cfg, "retreat_door_qvel_floor", 0.25))
+            _qvel_damp = float(np.clip(1.0 - abs(self._door_qvel()) / max(_qv_ref, 1e-6),
+                                       _qv_flr, 1.0))
             # §1.38 — CAUSA MISURATA (traccia diagnostica reale): il RETREAT (30 step) è
             # troppo CORTO per la sua sequenza fisica. La traccia mostra: gripper che parte a
             # width~0.046 e apre LENTO (supera la soglia 'dita libere' solo verso lo step ~10),
@@ -383,6 +394,14 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                             self._retreat_restore_cage = True
                         _gain = float(getattr(self.cfg, "retreat_restore_gain", 2.0))
                         _mag  = float(min(0.6, _gain * _latch_now))
+                        # §1.51 — avvio MORBIDO del riporto (rampa 0→1 sui primi step) +
+                        # guardia door_qvel: elimina lo strappo alla porta all'ingresso in
+                        # RETREAT (la morsa parte con presa chiusa, massimo accoppiamento
+                        # col cardine). La rotazione del polso sotto eredita _mag, quindi
+                        # si smorza in modo coerente.
+                        _rr = int(getattr(self.cfg, "retreat_restore_ramp", 4))
+                        _restore_ramp = 1.0 if _rr <= 0 else min(1.0, float(self._retreat_restore_steps) / float(_rr))
+                        _mag *= _restore_ramp * _qvel_damp
                         action[:3] = np.clip(_dir * _mag, -1.0, 1.0)
                         # §1.49 — ROTAZIONE DEL POLSO coerente col moto rigido attorno
                         # all'asse del latch. Prima le rotazioni erano AZZERATE → l'OSC
@@ -464,7 +483,7 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                     _n   = float(np.linalg.norm(_dir))
                     if _n > 1e-6:
                         _gain = float(getattr(self.cfg, "retreat_escape_gain", 5.0))
-                        action[:3]  = np.clip(_dir / _n * min(1.0, _gain * _n), -1.0, 1.0)
+                        action[:3]  = np.clip(_dir / _n * min(1.0, _gain * _n) * _qvel_damp, -1.0, 1.0)
                         if action.shape[0] > 4:
                             action[3:-1] = 0.0   # niente torsioni del polso durante l'escape
                     self._retreat_ramp_step = 0   # la rampa §1.21 parte DOPO l'escape

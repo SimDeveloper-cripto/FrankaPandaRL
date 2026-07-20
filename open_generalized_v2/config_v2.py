@@ -201,6 +201,15 @@ class TrainConfigV2Open:
     # in morsa le dita scivolano dalla barra e la pinza si chiude a pugno nel vuoto
     # (width 0.0012 misurata nel diag §1.49) trascinando la porta di ±0.13 rad.
     retreat_restore_cage_always  : bool  = True
+    # §1.51 — ANTI-BOUNCE + rilascio più deciso (env-level, deterministico). Post-training
+    # 4/5 PULITA con RIMBALZO ≤0.03, ma resta un avanti-indietro della porta all'ingresso
+    # in RETREAT (spike door_qvel −0.54 misurato) e un rilascio un po' lento. Rimedi:
+    #  • guardia door_qvel: se la porta si muove, il braccio MOLLA (scala l'azione fino a
+    #    floor) invece di inseguire → spezza il ciclo di rimbalzo.
+    #  • rampa del riporto: i primi step del riporto partono morbidi (niente strappo).
+    retreat_door_qvel_ref   : float = 0.15   # |dθ/dt| [rad/s] oltre cui il braccio molla
+    retreat_door_qvel_floor : float = 0.25   # scala minima del comando (non fermarsi mai del tutto)
+    retreat_restore_ramp    : int   = 4      # step di avvio morbido del riporto (0→pieno)
     retreat_hard_cap  : int   = 120    # §1.46: 90→120 per far spazio ai ≤20 step di
                                         # riporto leva. §1.44: era 200 — con l'incastro sistematico (§1.42/
                                         # §1.43) il cap NON era piu' una guardia ma la DURATA
@@ -251,7 +260,10 @@ class TrainConfigV2Open:
     # ── Override deterministici env-level (zero reward) — SPECULARE ──────────────
     # §1.17 — rilascio pulito nel RETREAT.
     retreat_clean_release : bool  = True
-    retreat_clear_margin  : float = 0.02
+    retreat_clear_margin  : float = 0.012  # §1.51: era 0.02 — sfilamento avviato ~2-3 step
+                                            # prima (dita libere = width > diam+margine): il
+                                            # braccio si allontana più in fretta appena la
+                                            # barra è geometricamente libera.
     # §1.22 — accompagnamento della LEVA/maniglia alla posizione di partenza PRIMA del
     # rilascio (env-level, ZERO reward). A porta aperta e ferma, durante la presa la leva
     # è tenuta ruotata; prima di staccarsi il braccio mantiene la presa e lascia che la
@@ -304,7 +316,17 @@ class TrainConfigV2Open:
     # accompagnare la maniglia alla posizione di partenza PRIMA di staccarsi. Attivo SOLO
     # in RETREAT → non interferisce col task (apertura). Peso moderato come la chiusura (1.0).
     w_latch_ret          : float = 1.0
-    retreat_latch_term_tol: float = 0.08   # §1.33: NON più gate di terminazione (misura MuJoCo:
+    retreat_latch_term_tol: float = 0.15   # §1.51: era 0.08. Post-training ep.4 (maniglia a
+                                            # bassa rigidità) la molla, appena rilasciata,
+                                            # SUPERA lo zero e oscilla, chiudendo a latch
+                                            # −0.127 → ESOGENA per un soffio. La misura MuJoCo
+                                            # (nota sotto) dà residuo di equilibrio 0.05–0.20
+                                            # sul range di stiffness randomizzato: 0.15 è
+                                            # DENTRO la banda fisica → la leva è "a casa" anche
+                                            # con l'overshoot, l'episodio chiude PULITO. Le
+                                            # PULITE già a 0.05–0.08 non cambiano. NON è un
+                                            # allargamento arbitrario: è la fisica del giunto.
+                                            # §1.33: gate storicamente non di terminazione (misura MuJoCo:
                                             # residuo leva ≈0.1/stiffness ∈ [0.05,0.20] a porta
                                             # aperta → irraggiungibile per stiffness ≲1.0).
                                             # Tenuto per diagnostica/retrocompatibilità.
