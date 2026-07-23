@@ -483,7 +483,16 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                     _n   = float(np.linalg.norm(_dir))
                     if _n > 1e-6:
                         _gain = float(getattr(self.cfg, "retreat_escape_gain", 5.0))
-                        action[:3]  = np.clip(_dir / _n * min(1.0, _gain * _n) * _qvel_damp, -1.0, 1.0)
+                        # §1.52 — NIENTE guardia door_qvel qui: durante lo SFILAMENTO la porta
+                        # è già rilasciata e il braccio si muove lungo la normale (VIA dalla
+                        # porta), quindi non la può far rimbalzare. Con la guardia (come in §1.51)
+                        # il comando veniva frenato dalle micro-oscillazioni di qvel (RIMBALZO=0
+                        # ma dθ/dt≈±0.02–0.07 per rumore di contatto) → il braccio arretrava solo
+                        # ~0.03 m prima della terminazione: allontanamento quasi invisibile. La
+                        # guardia RESTA nel riporto (righe sopra, presa chiusa = accoppiamento
+                        # reale col cardine, dove il rimbalzo NASCE). Qui: comando pieno → il
+                        # braccio arretra ~0.10 m come nei run pre-§1.51 (RIMBALZO comunque ~0).
+                        action[:3]  = np.clip(_dir / _n * min(1.0, _gain * _n), -1.0, 1.0)
                         if action.shape[0] > 4:
                             action[3:-1] = 0.0   # niente torsioni del polso durante l'escape
                     self._retreat_ramp_step = 0   # la rampa §1.21 parte DOPO l'escape

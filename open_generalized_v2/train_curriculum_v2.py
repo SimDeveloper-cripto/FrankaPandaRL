@@ -327,7 +327,8 @@ def _hud_summary(ep_idx, steps, phase_time, reward_cum, info, term, trunc,
 
 
 def play(cfg, model_path=None, hud_every=1, episodes=None, free_viewer=False,
-         cam_dist=2.6, cam_az=135.0, cam_el=-20.0, cam_z=1.0):
+         cam_dist=2.6, cam_az=135.0, cam_el=-20.0, cam_z=1.0,
+         retreat_slow=2.0, end_pause=2.5):
     import pickle
     from stable_baselines3 import SAC
 
@@ -453,11 +454,27 @@ def play(cfg, model_path=None, hud_every=1, episodes=None, free_viewer=False,
                     free.sync()
                 elif on_screen_ok:
                     env.render()
-                time.sleep(1.0 / 30.0)
+                # PLAY-ONLY: rallenta la fase RETREAT (fase 3) così l'allontanamento del
+                # braccio è ben visibile. NON tocca l'ambiente né il training: cambia solo
+                # quanto a lungo si dorme tra un frame e l'altro.
+                _slow = float(retreat_slow) if ph == 3 else 1.0
+                time.sleep((1.0 / 30.0) * max(0.0, _slow))
                 done = bool(term or trunc)
 
             _hud_summary(ep_idx, steps, phase_time, cum_reward, info, bool(term),
                          bool(trunc), rew_accum=rew_accum, open_tol=cfg.open_tol_rad)
+
+            # PLAY-ONLY: pausa a fine episodio tenendo a video la posa finale (braccio
+            # ritirato, porta aperta) prima del reset, così l'esito si vede con calma.
+            _t_end = time.time()
+            while (time.time() - _t_end) < float(end_pause):
+                if use_free and free is not None:
+                    if not free.is_running():
+                        return
+                    free.sync()
+                elif on_screen_ok:
+                    env.render()
+                time.sleep(1.0 / 30.0)
     finally:
         if free is not None:
             try: free.close()
@@ -489,6 +506,14 @@ def main():
                     help="[--free-viewer] elevazione iniziale in gradi (default -20).")
     ap.add_argument("--cam-z", type=float, default=1.0,
                     help="[--free-viewer] altezza (z) del punto guardato (default 1.0 ≈ maniglia).")
+    ap.add_argument("--retreat-slow", type=float, default=2.0,
+                    help="rallenta la fase RETREAT di questo fattore per vedere bene "
+                         "l'allontanamento del braccio (default 2.0; usa 1.0 per il TEMPO "
+                         "REALE, o un valore più alto per rallentare di più). "
+                         "Solo visualizzazione, NON tocca il training.")
+    ap.add_argument("--end-pause", type=float, default=2.5,
+                    help="secondi di pausa a fine episodio con la posa finale a video "
+                         "(default 2.5). Solo visualizzazione.")
     args = ap.parse_args()
 
     cfg = TrainConfigV2Open()
@@ -499,7 +524,8 @@ def main():
              episodes=args.episodes,
              free_viewer=args.free_viewer,
              cam_dist=args.cam_dist, cam_az=args.cam_az,
-             cam_el=args.cam_el, cam_z=args.cam_z)
+             cam_el=args.cam_el, cam_z=args.cam_z,
+             retreat_slow=args.retreat_slow, end_pause=args.end_pause)
     else:
         train(cfg, args.total_steps or cfg.total_steps)
 

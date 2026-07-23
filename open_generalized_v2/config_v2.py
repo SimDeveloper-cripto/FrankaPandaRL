@@ -107,8 +107,12 @@ class TrainConfigV2Open:
     # Timer di HOLD_OPEN adattivo alla rigidità del latch.
     fsm_hold_base_steps    : int   = 30
     fsm_hold_k_stiff       : float = 1.0
-    # RETREAT: step sostenuti prima di terminare (gestito dall'env).
-    fsm_retreat_target_steps: int  = 30
+    # RETREAT: step sostenuti (post-rilascio) prima di terminare (gate min_release).
+    # §1.52 — 30→40: con lo sfilamento sbloccato (guardia qvel tolta dall'escape, env §1.52)
+    # il braccio arretra ~0.10 m; 40 step post-rilascio (~1.3 s) danno il TEMPO di completare
+    # e vedere l'allontanamento prima della chiusura pulita. exo_exit=60 resta la rete di
+    # sicurezza (l'episodio chiude comunque), quindi nessun rischio di deadlock.
+    fsm_retreat_target_steps: int  = 40
     fsm_retreat_settle_dist : float = 0.06
     w_retreat_settle        : float = 20.0
     # §1.32 — RITIRO ATTIVO speculare alla chiusura (parametri IDENTICI a close config):
@@ -289,7 +293,20 @@ class TrainConfigV2Open:
     retreat_latch_max_steps   : int   = 20
     # §1.18 — grip-lock in PULL/HOLD_OPEN (blocca aperture accidentali).
     grip_lock_enabled     : bool  = True
-    grip_lock_margin      : float = 0.10
+    grip_lock_margin      : float = 0.15   # §1.53 — CONTATTO PIÙ SOLIDO. Il grip-lock (env,
+                                            # zero reward) si attiva SOLO quando le dita sono
+                                            # GIÀ fisicamente attorno alla maniglia
+                                            # (_prev_is_phys_closed): alzare il floor da
+                                            # grip_thresh+0.10 a +0.15 fa premere le dita più
+                                            # a fondo sulla barra che stanno già tenendo →
+                                            # presa più salda in PULL/HOLD_OPEN. NON viola la
+                                            # cautela §1.16 (over-close su maniglie sottili):
+                                            # le dita non possono chiudersi OLTRE il diametro
+                                            # della barra (la barra le blocca), quindi la
+                                            # larghezza resta ≈diam > 0.015 = dentro la banda
+                                            # di contatto. Direzionale (solo verso la chiusura),
+                                            # auto-disattivante se la presa si perde. Reversibile
+                                            # rimettendo 0.10.
     # §1.21 — rampa di avvio del ritiro (avvio morbido fermo→policy).
     retreat_rampup_enabled: bool  = True
     retreat_rampup_steps  : int   = 8
