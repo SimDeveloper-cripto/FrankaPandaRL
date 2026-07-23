@@ -84,6 +84,9 @@ def run(episodes, model_path, use_random, open_gripper, scripted=False):
     cfg.fixed_curriculum_level = 1.0
     env = AdvancedGeneralizedOpenDoorEnv(cfg)
     env.set_curriculum_level(1.0)
+    # §1.56 — attiva il ritiro verso la posa di partenza (diagnostica: come il play)
+    if getattr(cfg, 'retreat_to_start_enabled', True):
+        env.set_retreat_to_start(True)
 
     # stato condiviso per la mano guidata (legge il vettore eef->handle dall'info)
     _last = {"vec": None}
@@ -225,6 +228,14 @@ def run(episodes, model_path, use_random, open_gripper, scripted=False):
         oef = f"{open_err_final:.4f}" if open_err_final is not None else "n/d"
         print(f"  → open_error: minimo={oem}  finale={oef}  (tol={env.cfg.open_tol_rad:.3f})  "
               f"→ {'porta ARRIVATA al goal' if open_err_min <= env.cfg.open_tol_rad else 'goal MAI centrato entro tol'}")
+        # §1.55-diag — RILEVATORE "BRACCIO FERMO SULLA MANIGLIA" (solo diagnostica).
+        # Misura l'allontanamento MAX del braccio nel RETREAT: sotto soglia = non liberata.
+        _stuck_thr = 0.06
+        if retreat_trace:
+            _arr_max = max(t[5] for t in retreat_trace)
+            _arr_end = retreat_trace[-1][5]
+            print(f"  → RITIRO: allontanamento MAX={_arr_max:.4f} m  finale={_arr_end:.4f} m  "
+                  f"{'✗✗ FERMO SULLA MANIGLIA (braccio NON liberato)' if _arr_max < _stuck_thr else '✓ maniglia LIBERATA'}")
         # §1.38-diag — traccia RETREAT: rs | door | door_qvel | gripper_width | latch
         if retreat_trace:
             d0 = retreat_trace[0][1]

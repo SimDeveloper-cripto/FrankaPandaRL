@@ -65,6 +65,9 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
         super().__init__()
         self.cfg = cfg
         self.render_mode = render_mode
+        self._play_manual = False   # §1.58 PLAY-ONLY: se True, step() NON applica
+                                    # l'override del RETREAT → il play può guidare il
+                                    # braccio a mano (sollevamento finale). MAI in training.
         self.curriculum_level = float(cfg.fixed_curriculum_level)
 
         import robosuite as suite
@@ -158,6 +161,11 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
 
     def set_curriculum_level(self, level: float) -> None:
         self.curriculum_level = float(level)
+
+    def set_play_manual(self, on: bool = True) -> None:
+        """§1.58 — PLAY-ONLY: disabilita l'override del RETREAT così il player
+        può muovere il braccio direttamente (sollevamento finale). MAI in training."""
+        self._play_manual = bool(on)
 
     def _door_angle(self) -> float:
         a = float(self._rs_env.sim.data.qpos[self._door_hinge_qpos_adr])
@@ -315,7 +323,7 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                 action[-1] = max(float(action[-1]), grip_floor)
 
         # ── §1.22 ACCOMPAGNA LEVA + §1.17 RILASCIO PULITO + §1.21 RAMPA in RETREAT ──
-        elif phase == PHASE_RETREAT:
+        elif phase == PHASE_RETREAT and not getattr(self, '_play_manual', False):
             # §1.41-diag — memorizza la posa eef all'INGRESSO in RETREAT per misurare quanto
             # il braccio arretra davvero (l'unica variabile che mancava alla traccia).
             if getattr(self, "_retreat_eef0", None) is None:
@@ -478,7 +486,23 @@ class AdvancedGeneralizedOpenDoorEnv(gym.Env):
                     self._retreat_escape_eef0 = _eef_now.copy()
                 _moved    = float(np.linalg.norm(_eef_now - self._retreat_escape_eef0))
                 _latch_now = abs(self._latch_qpos())
-                if _esc_on and _rp is not None and _moved < _esc_dist and _latch_now > _lt_tol:
+                # §1.54 — CLEARANCE GARANTITA DELLA MANIGLIA. Prima l'escape cedeva alla
+                # policy appena la leva tornava a casa (`_latch_now > _lt_tol`): nei casi in
+                # cui la leva si neutralizza PRESTO (bassa rigidità / riporto veloce) mentre
+                # il braccio è ancora vicino alla maniglia, la guida si spegneva col braccio
+                # a ~0 m e la policy — che nel RETREAT non è sempre affidabile — a volte NON
+                # si ritirava → braccio FERMO sulla maniglia (il caso intermittente osservato
+                # nello screenshot). Fix coerente con la metodologia (guida DETERMINISTICA
+                # della qualità del moto, come il rilascio §1.17 e la rampa §1.21): l'escape
+                # guida il braccio finché non ha LIBERATO la maniglia — cioè finché
+                # `_moved < _esc_dist` — INDIPENDENTEMENTE dalla leva. La leva è comunque
+                # gestita a monte dal riporto attivo §1.46; il gate sulla leva qui serviva
+                # solo come "uscita anticipata" ed era la causa dello stallo. Effetto sui
+                # casi che GIÀ funzionano: nullo (in quelli la leva resta >0.05 per tutto
+                # lo sfilamento, quindi la condizione rimossa non scattava mai). Rete di
+                # sicurezza invariata: exo_exit=60 chiude comunque. Reversibile ripristinando
+                # `and _latch_now > _lt_tol`.
+                if _esc_on and _rp is not None and _moved < _esc_dist:
                     _dir = np.asarray(_rp, dtype=np.float32) - _eef_now.astype(np.float32)
                     _n   = float(np.linalg.norm(_dir))
                     if _n > 1e-6:

@@ -328,7 +328,7 @@ def _hud_summary(ep_idx, steps, phase_time, reward_cum, info, term, trunc,
 
 def play(cfg, model_path=None, hud_every=1, episodes=None, free_viewer=False,
          cam_dist=2.6, cam_az=135.0, cam_el=-20.0, cam_z=1.0,
-         retreat_slow=2.0, end_pause=2.5):
+         retreat_slow=2.0, end_pause=2.5, lift=0.20):
     import pickle
     from stable_baselines3 import SAC
 
@@ -461,6 +461,44 @@ def play(cfg, model_path=None, hud_every=1, episodes=None, free_viewer=False,
                 time.sleep((1.0 / 30.0) * max(0.0, _slow))
                 done = bool(term or trunc)
 
+            # §1.58 — PLAY-ONLY: SOLLEVAMENTO FINALE del braccio a posa pulita (su + indietro
+            # verso la base), come la chiusura v2 che «si alza e si allontana». L'episodio è
+            # già finito (task compiuto: porta aperta, leva a casa, gripper aperto): qui
+            # prendiamo il controllo manuale del braccio (env._play_manual salta l'override
+            # del RETREAT) e lo portiamo IN ALTO e INDIETRO, lontano dalla porta. Il
+            # sollevamento (+Z) NON è quasi-singolare come lo sfilamento (+Y), quindi è
+            # rapido. È SOLO visualizzazione: non tocca ambiente-logica, reward o training.
+            if float(lift) > 0.0 and int(info.get("fsm_phase", -1)) == 3:
+                try:
+                    env.set_play_manual(True)
+                    _e0 = env._eef_pos().copy()
+                    _k = 0
+                    while _k < 160:
+                        _e = env._eef_pos()
+                        if float(_e[2] - _e0[2]) >= float(lift):
+                            break                       # sollevato abbastanza
+                        _bxy = -np.array([_e[0], _e[1]], dtype=np.float32)   # verso la base (origine)
+                        _bn = float(np.linalg.norm(_bxy))
+                        _bxy = _bxy / _bn if _bn > 1e-6 else np.array([0.0, 1.0], dtype=np.float32)
+                        _act = np.zeros(env.action_space.shape[0], dtype=np.float32)
+                        _act[0] = 0.5 * _bxy[0]; _act[1] = 0.5 * _bxy[1]; _act[2] = 1.0  # su + indietro
+                        _act[-1] = -1.0                 # gripper aperto
+                        obs, reward, term, trunc, info = env.step(_act)
+                        _k += 1
+                        if use_free and free is not None:
+                            if not free.is_running():
+                                return
+                            free.sync()
+                        elif on_screen_ok:
+                            env.render()
+                        time.sleep((1.0 / 30.0) * max(0.0, float(retreat_slow)))
+                    env.set_play_manual(False)
+                    print("  " + _c(f"▸ braccio sollevato a posa pulita (+{_k} frame)", "cyan"))
+                except Exception as _e_lift:
+                    try: env.set_play_manual(False)
+                    except Exception: pass
+                    print(f"  [PLAY] sollevamento finale saltato ({_e_lift})")
+
             _hud_summary(ep_idx, steps, phase_time, cum_reward, info, bool(term),
                          bool(trunc), rew_accum=rew_accum, open_tol=cfg.open_tol_rad)
 
@@ -514,6 +552,8 @@ def main():
     ap.add_argument("--end-pause", type=float, default=2.5,
                     help="secondi di pausa a fine episodio con la posa finale a video "
                          "(default 2.5). Solo visualizzazione.")
+    ap.add_argument("--lift", type=float, default=0.20,
+                    help="[play] a fine episodio solleva il braccio a posa pulita (su+indietro) di questi metri (default 0.20; 0 = disattiva). Solo visualizzazione, non tocca il training.")
     args = ap.parse_args()
 
     cfg = TrainConfigV2Open()
@@ -525,7 +565,8 @@ def main():
              free_viewer=args.free_viewer,
              cam_dist=args.cam_dist, cam_az=args.cam_az,
              cam_el=args.cam_el, cam_z=args.cam_z,
-             retreat_slow=args.retreat_slow, end_pause=args.end_pause)
+             retreat_slow=args.retreat_slow, end_pause=args.end_pause,
+             lift=args.lift)
     else:
         train(cfg, args.total_steps or cfg.total_steps)
 

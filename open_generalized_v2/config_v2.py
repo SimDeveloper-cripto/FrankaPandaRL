@@ -161,6 +161,11 @@ class TrainConfigV2Open:
     retreat_escape_enabled : bool  = True
     retreat_escape_dist    : float = 0.15
     retreat_escape_gain    : float = 5.0   # guadagno direzione→azione (come la mano guidata)
+    # §1.56 — RITIRO VERSO LA POSA DI PARTENZA (SOLO play/diagnostica, MAI training).
+    # retreat_to_start_enabled = default che play/diagnostica passano a env.set_retreat_to_start().
+    # In training il flag runtime dell'env resta False → target = normale (baseline 100%).
+    retreat_to_start_enabled   : bool  = True    # attivo in play/diag; ininfluente in training
+    retreat_to_start_clearance : float = 0.10    # [m] offset del target lungo la normale (anti-incastro)
     # §1.44 — USCITA ESOGENA GARANTITA (la ricetta §1.36/§1.37 capita fino in fondo, che
     # faceva il 100% VERO). Il gate §1.42 sul latch rendeva la durata del RETREAT
     # controllabile dalla policy (incastro = episodio infinito = farming del reddito
