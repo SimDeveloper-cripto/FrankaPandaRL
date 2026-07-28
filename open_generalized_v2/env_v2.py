@@ -43,17 +43,15 @@ ROBOSUITE_DEFAULT_LOGGER.setLevel(logging.ERROR)
 
 # Import robusti: prima qualificati col package, poi fallback "piatti".
 try:
-    from open_generalized_v2.config_v2 import TrainConfigV2Open
-    from open_generalized_v2.fsm_v2 import (AdaptiveFSMOpen, PHASE_REACH, PHASE_PULL,
-                                            PHASE_HOLD_OPEN, PHASE_RETREAT)
-    from open_generalized_v2.reward_v2 import PotentialBasedRewardOpen
+    from open_generalized_v2.config_v2      import TrainConfigV2Open
+    from open_generalized_v2.fsm_v2         import (AdaptiveFSMOpen, PHASE_REACH, PHASE_PULL, PHASE_HOLD_OPEN, PHASE_RETREAT)
+    from open_generalized_v2.reward_v2      import PotentialBasedRewardOpen
     from open_generalized_v2.domain_rand_v2 import ExtendedDomainRandomizer
     from open_generalized_v2.grasp_strategy import MultiApproachGrasp
 except ModuleNotFoundError:
-    from config_v2 import TrainConfigV2Open
-    from fsm_v2 import (AdaptiveFSMOpen, PHASE_REACH, PHASE_PULL,
-                        PHASE_HOLD_OPEN, PHASE_RETREAT)
-    from reward_v2 import PotentialBasedRewardOpen
+    from config_v2      import TrainConfigV2Open
+    from fsm_v2         import (AdaptiveFSMOpen, PHASE_REACH, PHASE_PULL, PHASE_HOLD_OPEN, PHASE_RETREAT)
+    from reward_v2      import PotentialBasedRewardOpen
     from domain_rand_v2 import ExtendedDomainRandomizer
     from grasp_strategy import MultiApproachGrasp
 

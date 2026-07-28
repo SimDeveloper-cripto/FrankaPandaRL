@@ -28,6 +28,87 @@ from close_generalized_v2.config_v2 import TrainConfigV2
 from close_generalized_v2.env_v2    import AdvancedGeneralizedDoorEnv
 
 
+_HUD_TTY = None
+_ANSI    = {"reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
+           "green": "\033[32m", "red": "\033[31m", "yellow": "\033[33m",
+           "cyan": "\033[36m", "mag": "\033[35m", "blue": "\033[34m"}
+
+_PHASE_COL = {"REACH": "cyan", "PULL": "yellow", "HOLD_OPEN": "green",
+              "PUSH": "yellow", "HOLD": "green", "RETREAT": "mag"}
+
+def _c(txt, color):
+    global _HUD_TTY
+    if _HUD_TTY is None:
+        try:    _HUD_TTY = bool(sys.stdout.isatty())
+        except Exception: _HUD_TTY = False
+    if not _HUD_TTY or color not in _ANSI:
+        return txt
+    return f"{_ANSI[color]}{txt}{_ANSI['reset']}"
+
+def _fnum(x, fmt = "%+.3f"):
+    try:    return fmt % float(x)
+    except Exception: return " n/a "
+
+def _hud_step(step, action, reward, info, fsm_state, cum_reward):
+    ph    = info.get("fsm_phase_name", "?")
+    door  = info.get("door_angle");  goal = info.get("goal_angle")
+    oerr  = info.get("open_error");  latch = info.get("latch_qpos")
+    disth = info.get("dist_handle"); gw    = info.get("gripper_width")
+    grip  = float(action[-1]) if action is not None and len(action) else float("nan")
+
+    # riga 1 — fase FSM + stato porta
+    print("┌ step %5d   fase %s   door=%s/%s rad   open_err=%s   latch=%s" % (
+        step, _c("%-9s" % ph, _PHASE_COL.get(ph, "blue")),
+        _fnum(door, "%.3f"), _fnum(goal, "%.3f"),
+        _fnum(oerr, "%.3f"), _fnum(latch, "%+.3f")))
+
+    # riga 2 — geometria mano + contatori FSM
+    print("│ dist_maniglia=%s   grip_width=%s   cmd_grip=%s   "
+          "FSM[reach=%d pull=%d hold=%d/%s retreat=%d grasp=%d]" % (
+                _fnum(disth, "%.4f"), _fnum(gw, "%.4f"), _fnum(grip, "%+.2f"),
+                getattr(fsm_state,     "reach_steps", 0),
+                getattr(fsm_state,     "pull_steps", 0),
+                getattr(fsm_state,     "hold_steps_total", 0),
+                str(getattr(fsm_state, "target_hold_steps", None)),
+                getattr(fsm_state,     "retreat_steps", 0),
+                getattr(fsm_state,     "grasp_confirm_count", 0)
+            )
+        )
+
+    # riga 3+ — reward/penalty machine
+    terms = dict(info.get("reward_terms", {}) or {})
+    premi    = {k: v for k, v in terms.items() if v > 1e-9}
+    penalita = {k: v for k, v in terms.items() if v < -1e-9}
+    def _cells(d, color):
+        return "  ".join(_c("%s=%s" % (k, _fnum(v, "%+.2f")), color)
+                         for k, v in sorted(d.items(), key=lambda kv: -abs(kv[1])))
+    if premi:
+        print("│ " + _c("PREMI    ", "green") + _cells(premi, "green"))
+    if penalita:
+        print("│ " + _c("PENALITÀ ", "red") + _cells(penalita, "red"))
+    if not premi and not penalita:
+        print("│ " + _c("(nessun termine di reward attivo)", "dim"))
+
+    tcol = "green" if reward >= 0 else "red"
+    print("└ " + _c("Σ step = %s" % _fnum(reward, "%+.3f"), tcol) +
+          "   Σ episodio = %s" % _fnum(cum_reward, "%+.2f"))
+
+def _hud_summary(ep_terms, success, phase, steps):
+    print("─" * 78)
+    tag = _c("SUCCESSO", "green") if success else _c("non completato", "red")
+    print("RIEPILOGO EPISODIO — %s   fase finale=%s   step=%d" % (tag, phase, steps))
+    if ep_terms:
+        ordered = sorted(ep_terms.items(), key=lambda kv: -abs(kv[1]))
+        for k, v in ordered:
+            col = "green" if v >= 0 else "red"
+            bar = "█" * min(30, int(abs(v)))
+            print("  %-16s %s  %s" % (k, _c(_fnum(v, "%+9.2f"), col), _c(bar, col)))
+        tot = sum(ep_terms.values())
+        print("  %-16s %s" % ("TOTALE", _c(_fnum(tot, "%+9.2f"),
+                                           "green" if tot >= 0 else "red")))
+    print("─" * 78)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 class GraspDiagnosticCallbackV2(BaseCallback):
     def __init__(self, log_every: int = 10_000):
@@ -183,9 +264,6 @@ class CustomEvalCallbackV2(BaseCallback):
                 if hasattr(self.model.get_vec_normalize_env(), "ret_rms"):
                     self.eval_env.ret_rms = self.model.get_vec_normalize_env().ret_rms
 
-            # §1.12 — evaluate at the SAME curriculum level the policy trains on, so
-            # eval/success_rate reflects robustness to the randomized poses being
-            # learned (otherwise eval stays at level 0 = fixed pose, over-optimistic).
             try:
                 train_level = self.training_env.get_attr("curriculum_level")[0]
                 self.eval_env.env_method("set_curriculum_level", train_level)
@@ -336,6 +414,9 @@ def main():
         prev_act  = np.zeros(raw_env.action_space.shape)
 
         print("[v2] Playing... (Ctrl+C to stop)")
+        ep_step    = 0          # contatore step dell'episodio corrente
+        ep_cum     = 0.0        # reward cumulativo dell'episodio
+        ep_terms   = {}         # somma per-termine dei reward (per il riepilogo)
         while True:
             t0 = time.perf_counter()
             if obs_rms is not None:
@@ -349,15 +430,25 @@ def main():
             obs, r, term, trunc, info = raw_env.step(act)
             raw_env.render()
 
+            # ── HUD: FSM + reward/penalty machine (solo stampa) ──────────────
+            ep_step += 1
+            ep_cum  += float(r)
+            for _k, _v in (info.get("reward_terms", {}) or {}).items():
+                ep_terms[_k] = ep_terms.get(_k, 0.0) + float(_v)
+            _hud_step(ep_step, act, float(r), info, raw_env._fsm.state, ep_cum)
+
             elapsed = time.perf_counter() - t0
             if elapsed < target_dt:
                 time.sleep(target_dt - elapsed)
 
             if term or trunc:
+                _hud_summary(ep_terms, info.get("is_success"),
+                             info.get("fsm_phase_name"), ep_step)
                 print(f"[v2] Episode done — success={info.get('is_success')}, "
                       f"phase={info.get('fsm_phase_name')}")
                 obs, _ = raw_env.reset()
                 prev_act[:] = 0
+                ep_step, ep_cum, ep_terms = 0, 0.0, {}
 
     # ── Train mode ────────────────────────────────────────────────────────────
     else:
@@ -437,9 +528,6 @@ def main():
 
         print(f"[v2] Training for {cfg.total_steps:,} steps → {cfg.run_dir}")
 
-        # §1.15 — Assembla i callback. La curriculum ADATTIVA gira solo se il livello NON è fissato
-        # Se è fissato, ancoriamo subito tutti gli env di training al
-        # livello scelto (la reset() lo ri-fissa comunque a ogni episodio)
         callbacks = [scb, gcb]
         if cfg.fixed_curriculum_level is None:
             callbacks.append(ccb)

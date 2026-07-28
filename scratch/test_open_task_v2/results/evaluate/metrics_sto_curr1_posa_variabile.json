@@ -1,0 +1,198 @@
+{
+  "mode": "Train (stocastica)",
+  "curriculum": 1.0,
+  "n_episodes": 100,
+  "success_rate": {
+    "point": 1.0,
+    "lo": 0.9630065017930143,
+    "hi": 1.0,
+    "conf": 0.95
+  },
+  "true_success_rate": {
+    "point": 0.88,
+    "lo": 0.8018790057328857,
+    "hi": 0.9300059356298052,
+    "conf": 0.95
+  },
+  "clean_success_rate": {
+    "point": 0.88,
+    "lo": 0.8018790057328857,
+    "hi": 0.9300059356298052,
+    "conf": 0.95
+  },
+  "length_iqm": {
+    "point": 159.8,
+    "lo": 155.9,
+    "hi": 164.16049999999998,
+    "conf": 0.95
+  },
+  "length_mean": 174.2,
+  "length_cvar_worst10": 302.2,
+  "open_error_end_iqm": {
+    "point": 0.025266115809453493,
+    "lo": 0.019989553804336202,
+    "hi": 0.030584816520213894,
+    "conf": 0.95
+  },
+  "signed_error_end": {
+    "mean": 0.024525849156005305,
+    "median": 0.022703819420339305,
+    "frac_overshoot": 0.88
+  },
+  "open_error_end_cvar_worst10": 0.05325730206777339,
+  "min_open_error_iqm": {
+    "point": 0.0005001559140203827,
+    "lo": 0.00038818243292322097,
+    "hi": 0.000677526359470549,
+    "conf": 0.95
+  },
+  "retreat_moved_iqm": {
+    "point": 0.19092620226675625,
+    "lo": 0.18819667108307858,
+    "hi": 0.19409462503574176,
+    "conf": 0.95
+  },
+  "retreat_moved_cvar_worst10": 0.16431567202302727,
+  "stuck_on_handle": {
+    "count": 0,
+    "of_retreat_episodes": 100,
+    "ci": {
+      "point": 0.0,
+      "lo": 3.469446951953614e-18,
+      "hi": 0.03699349820698568,
+      "conf": 0.95
+    }
+  },
+  "max_phase_distribution": {
+    "REACH": 0,
+    "PULL": 0,
+    "HOLD_OPEN": 0,
+    "RETREAT": 100
+  },
+  "failure_breakdown": {
+    "SUCCESS": {
+      "count": 88,
+      "ci": {
+        "point": 0.88,
+        "lo": 0.8018790057328857,
+        "hi": 0.9300059356298052,
+        "conf": 0.95
+      }
+    },
+    "REACH timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "PULL timeout / grasp lost": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "HOLD_OPEN regress / timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT overshoot (oltre il goal)": {
+      "count": 12,
+      "ci": {
+        "point": 0.12,
+        "lo": 0.0699940643701949,
+        "hi": 0.19812099426711421,
+        "conf": 0.95
+      }
+    },
+    "RETREAT door regress (sotto il goal)": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT latch not neutral": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT stuck on handle": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "RETREAT timeout": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    }
+  },
+  "termination_breakdown": {
+    "PULITA": {
+      "count": 100,
+      "ci": {
+        "point": 1.0,
+        "lo": 0.9630065017930143,
+        "hi": 1.0,
+        "conf": 0.95
+      }
+    },
+    "ESOGENA": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "HARD-CAP": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    },
+    "troncata a orizzonte": {
+      "count": 0,
+      "ci": {
+        "point": 0.0,
+        "lo": 3.469446951953614e-18,
+        "hi": 0.03699349820698568,
+        "conf": 0.95
+      }
+    }
+  },
+  "goal_angle": {
+    "mean": 0.36764060815592997,
+    "min": 0.34027642824100945,
+    "max": 0.3996061262875251
+  }
+}
