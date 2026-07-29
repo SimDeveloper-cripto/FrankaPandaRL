@@ -52,6 +52,8 @@ def run(n_episodes, deterministic, curriculum, run_dir, base_seed=30_000, tag=No
 
     hold_norms, wrist_rots, regress = [], [], []
     oe_trans, latch_trans, moved_max = [], [], []
+    dev_per_ep = []          # (n_oltre, n_sotto) per episodio → statistica episodio-pesata
+    moved_ret = []           # allontanamento SOLO degli episodi che raggiungono RETREAT
     succ = 0
     n_ret = 0
     for i in range(n_episodes):
@@ -62,8 +64,11 @@ def run(n_episodes, deterministic, curriculum, run_dir, base_seed=30_000, tag=No
         wrist_rots += rec.retreat_wrist_rots
         regress += rec.regress_events
         moved_max.append(rec.retreat_moved_max)
+        dev_per_ep.append((sum(1 for _, e, _ in rec.regress_events if e > 0),
+                           sum(1 for _, e, _ in rec.regress_events if e < 0)))
         if rec.max_phase == "RETREAT":
             n_ret += 1
+            moved_ret.append(rec.retreat_moved_max)
         if rec.open_error_at_transition is not None:
             oe_trans.append(rec.open_error_at_transition)
         if rec.latch_at_transition is not None:
@@ -133,30 +138,61 @@ def run(n_episodes, deterministic, curriculum, run_dir, base_seed=30_000, tag=No
         print("  T5b latch@trans    : n/d")
 
     n_over = int(sum(1 for _, e, _ in regress if e > 0))
+    # ATTENZIONE METODOLOGICA. Il conteggio per STEP non è episodio-pesato: un episodio in
+    # stallo resta centinaia di step fuori tolleranza e da solo può ribaltare la
+    # proporzione. (Osservato: con 30 episodi senza stalli il conteggio dava il 91% di
+    # scostamenti "oltre"; con 100 episodi, 4 stalli hanno portato gli "oltre" al 12%.)
+    # Si riporta quindi anche la statistica EPISODIO-pesata, che è quella da citare, e un
+    # indice di dominanza che segnala quando pochi episodi governano il totale.
+    ep_over = int(sum(1 for o, _ in dev_per_ep if o > 0))
+    ep_under = int(sum(1 for _, u in dev_per_ep if u > 0))
+    tot_per_ep = sorted((o + u for o, u in dev_per_ep), reverse=True)
+    dominance = (float(sum(tot_per_ep[:3]) / len(regress)) if regress else None)
     out["T6_deviation_events"] = dict(
         n=len(regress), n_overshoot=n_over, n_regress=len(regress) - n_over,
         frac_overshoot=(float(n_over / len(regress)) if regress else None),
+        # ── statistica episodio-pesata (da preferire) ──
+        n_episodes=len(dev_per_ep),
+        episodes_with_overshoot=ep_over, episodes_with_regress=ep_under,
+        frac_episodes_overshoot=float(ep_over / max(1, len(dev_per_ep))),
+        frac_episodes_regress=float(ep_under / max(1, len(dev_per_ep))),
+        episodes_overshoot_ci=S.wilson_ci(ep_over, max(1, len(dev_per_ep))).as_dict(),
+        episodes_regress_ci=S.wilson_ci(ep_under, max(1, len(dev_per_ep))).as_dict(),
+        top3_episode_share=dominance,
         max_abs_error=float(max((abs(e) for _, e, _ in regress), default=0.0)),
         max_qvel=float(max((abs(v) for _, _, v in regress), default=0.0)),
         severe=int(sum(1 for _, e, _ in regress if abs(e) > 2 * open_tol)),
         events=[(int(s), float(e), float(v)) for s, e, v in regress])
-    print(f"  T6 scostamenti HOLD: {len(regress)} step fuori tolleranza "
-          f"({n_over} OLTRE il goal, {len(regress)-n_over} SOTTO), "
-          f"|err| max {out['T6_deviation_events']['max_abs_error']:.4f} rad, "
+    print(f"  T6 scostamenti HOLD:")
+    print(f"      per EPISODIO (da citare): {ep_over}/{len(dev_per_ep)} episodi con almeno "
+          f"uno scostamento OLTRE il goal, {ep_under}/{len(dev_per_ep)} con almeno uno SOTTO")
+    print(f"      per STEP (non episodio-pesato): {len(regress)} step "
+          f"({n_over} oltre, {len(regress)-n_over} sotto)"
+          + (f" — i 3 episodi peggiori pesano il {dominance*100:.0f}% del totale"
+             if dominance is not None else ""))
+    print(f"      |err| max {out['T6_deviation_events']['max_abs_error']:.4f} rad, "
           f"severi(>2·tol) {out['T6_deviation_events']['severe']}")
 
+    # "Fermo sulla maniglia" ha senso SOLO per gli episodi che il RETREAT lo raggiungono:
+    # chi si blocca prima ha allontanamento 0 per definizione, non per incastro. Il
+    # denominatore corretto è quindi n_ret (come già fa la batteria evaluate).
     a = np.asarray(moved_max) if moved_max else np.zeros(0)
-    n_stuck = int((a < STUCK_MOVE_THRESH).sum()) if a.size else 0
+    ar = np.asarray(moved_ret) if moved_ret else np.zeros(0)
+    n_stuck = int((ar < STUCK_MOVE_THRESH).sum()) if ar.size else 0
     out["T7_retreat_moved"] = dict(
-        n=int(a.size), iqm=(S.bootstrap_ci(a, "iqm").as_dict() if a.size else None),
-        cvar_worst10=(S.cvar(a, 0.1, lower_tail=True) if a.size else None),
-        n_stuck=n_stuck, n_retreat_episodes=n_ret,
-        stuck_ci=S.wilson_ci(n_stuck, max(1, len(a))).as_dict(),
-        values=a.tolist())
-    if a.size:
-        print(f"  T7 allontanamento  : IQM {S.bootstrap_ci(a,'iqm')} m | "
-              f"CVaR peggior 10% = {S.cvar(a, 0.1, lower_tail=True):.4f} m | "
-              f"fermi sulla maniglia (<{STUCK_MOVE_THRESH} m): {S.wilson_ci(n_stuck, len(a))}")
+        n=int(a.size), n_retreat_episodes=int(ar.size),
+        iqm=(S.bootstrap_ci(ar, "iqm").as_dict() if ar.size else None),
+        cvar_worst10=(S.cvar(ar, 0.1, lower_tail=True) if ar.size else None),
+        n_stuck=n_stuck,
+        stuck_ci=S.wilson_ci(n_stuck, max(1, int(ar.size))).as_dict(),
+        n_never_retreat=int(a.size - ar.size),
+        values=ar.tolist(), values_all=a.tolist())
+    if ar.size:
+        print(f"  T7 allontanamento  : IQM {S.bootstrap_ci(ar,'iqm')} m | "
+              f"CVaR peggior 10% = {S.cvar(ar, 0.1, lower_tail=True):.4f} m | "
+              f"fermi sulla maniglia (<{STUCK_MOVE_THRESH} m): "
+              f"{S.wilson_ci(n_stuck, int(ar.size))} sui {int(ar.size)} episodi che "
+              f"raggiungono il RETREAT ({int(a.size - ar.size)} non lo raggiungono)")
     print("=" * 76 + "\n")
 
     plt = setup_matplotlib(); outdir = results_dir("phase")
@@ -187,13 +223,20 @@ def run(n_episodes, deterministic, curriculum, run_dir, base_seed=30_000, tag=No
         safe_hist(ax, [e for _, e, _ in regress], 30, color="#d62728")
         ax.axvline(open_tol, ls="--", color="k"); ax.axvline(-open_tol, ls="--", color="k")
         ax.axvline(0.0, color="k", lw=0.8)
-        ax.set_title(f"T6 — scostamenti in HOLD_OPEN ({tag})\ndestra = aperta OLTRE il goal, sinistra = ricaduta sotto")
+        _t6 = out["T6_deviation_events"]
+        ax.set_title(f"T6 — scostamenti in HOLD_OPEN ({tag})\n"
+                     f"destra = aperta OLTRE il goal, sinistra = ricaduta sotto  ·  "
+                     f"per episodio: {_t6['episodes_with_overshoot']} oltre / "
+                     f"{_t6['episodes_with_regress']} sotto su {_t6['n_episodes']}",
+                     fontsize=10)
         ax.set_xlabel("errore con segno (angolo − goal) [rad]")
         fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_T6_regress_{m}_{tag}.png"), dpi=130); plt.close(fig)
-    if a.size:
-        fig, ax = plt.subplots(figsize=(8, 5)); safe_hist(ax, a, 30, color="#17becf")
+    if ar.size:
+        fig, ax = plt.subplots(figsize=(8, 5)); safe_hist(ax, ar, 30, color="#17becf")
         ax.axvline(STUCK_MOVE_THRESH, ls="--", color="k")
-        ax.set_title(f"T7 — allontanamento massimo del braccio in RETREAT ({tag})")
+        ax.set_title(f"T7 — allontanamento massimo del braccio in RETREAT ({tag})\n"
+                     f"solo i {int(ar.size)} episodi che raggiungono il RETREAT "
+                     f"({int(a.size - ar.size)} esclusi: bloccati prima)")
         ax.set_xlabel("m (a sinistra della linea = fermo sulla maniglia)")
         fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_T7_moved_{m}_{tag}.png"), dpi=130); plt.close(fig)
 

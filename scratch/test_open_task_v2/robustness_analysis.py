@@ -47,6 +47,10 @@ AXES = {
     "door_x": "Distanza porta (x, m)",
 }
 
+# Numerosità minima per considerare interpretabile una cella di heatmap: sotto questa
+# soglia il tasso è dominato dalla granularità (a n = 5 i valori possibili sono 0, 20, 40…).
+MIN_CELL_N = 10
+
 HEATMAPS = [
     ("friction_radius", "handle_friction", "handle_radius"),
     ("latch_mass", "latch_stiffness_ratio", "door_mass_ratio"),
@@ -93,7 +97,7 @@ def stratify_1d(recs, key, n_bins=6):
     return bins
 
 
-def heatmap_2d(recs, kx, ky, nb=4):
+def heatmap_2d(recs, kx, ky, nb=3):
     vx = np.array([getattr(r, kx) for r in recs], float)
     vy = np.array([getattr(r, ky) for r in recs], float)
     oc = np.array([1 if r.true_success else 0 for r in recs], int)
@@ -137,6 +141,7 @@ def run(n_episodes, curriculum, run_dir, deterministic=True, tag=None):
             for b in bins:
                 print(f"    [{b['lo']:.3f},{b['hi']:.3f}]  n={b['n']:>3}  "
                       f"true={b['rate']*100:5.1f}% [{b['ci_lo']*100:4.1f},{b['ci_hi']*100:4.1f}]")
+    # griglia 3×3 invece di 4×4: con 150 episodi porta la cella tipica da ~9 a ~17 unità
     out["heatmaps"] = {name: heatmap_2d(recs, kx, ky) for name, kx, ky in HEATMAPS}
     print(f"\n  True success complessivo : {S.wilson_ci(sum(r.true_success for r in recs), n)}")
     print(f"  Clean success complessivo: {S.wilson_ci(sum(r.clean_success for r in recs), n)}")
@@ -164,15 +169,41 @@ def run(n_episodes, curriculum, run_dir, deterministic=True, tag=None):
     fig.suptitle(f"Inviluppo operativo apertura v2 — true success vs parametri ({tag})")
     fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_envelope_1d_{tag}.png"), dpi=130); plt.close(fig)
 
+    # ── Heatmap 2D ──────────────────────────────────────────────────────────
+    # Una griglia 4×4 su 150 episodi lascia poche unità per cella: a n = 2 il tasso può
+    # valere solo 0/50/100% ed è rumore puro, ma la scala di colore lo fa sembrare
+    # struttura. Rimedio: si SBIANCANO le celle sotto MIN_CELL_N e si annota n in ogni
+    # cella, così il lettore vede immediatamente su cosa può e non può concludere.
     for name, hm in out["heatmaps"].items():
         if hm is None:
             continue
-        fig, ax = plt.subplots(figsize=(7, 6))
+        fig, ax = plt.subplots(figsize=(7.5, 6))
         rate = np.array(hm["rate"], float) * 100
-        im = ax.imshow(rate, origin="lower", aspect="auto", cmap="RdYlGn", vmin=0, vmax=100,
+        cnt = np.array(hm["count"], float)
+        shown = np.where(cnt >= MIN_CELL_N, rate, np.nan)   # sotto soglia: non mostrata
+        cmap = plt.get_cmap("RdYlGn").copy(); cmap.set_bad("#f0f0f0")
+        im = ax.imshow(shown, origin="lower", aspect="auto", cmap=cmap, vmin=0, vmax=100,
                        extent=[hm["ex"][0], hm["ex"][-1], hm["ey"][0], hm["ey"][-1]])
+        ex, ey = np.array(hm["ex"], float), np.array(hm["ey"], float)
+        xc = (ex[:-1] + ex[1:]) / 2.0
+        yc = (ey[:-1] + ey[1:]) / 2.0
+        n_low = 0
+        for j, y in enumerate(yc):
+            for i, x in enumerate(xc):
+                n_ij = int(cnt[j, i])
+                if n_ij == 0:
+                    continue
+                if n_ij < MIN_CELL_N:
+                    n_low += 1
+                    ax.text(x, y, f"n={n_ij}", ha="center", va="center",
+                            fontsize=8, color="#888888", style="italic")
+                else:
+                    ax.text(x, y, f"{rate[j, i]:.0f}%\nn={n_ij}", ha="center", va="center",
+                            fontsize=8, color="black")
         ax.set_xlabel(AXES.get(hm["kx"], hm["kx"])); ax.set_ylabel(AXES.get(hm["ky"], hm["ky"]))
-        ax.set_title(f"True success (%) — {name} ({tag})")
+        ax.set_title(f"True success (%) — {name} ({tag})\n"
+                     f"celle con n < {MIN_CELL_N} in grigio: non interpretabili "
+                     f"({n_low} su {int((cnt > 0).sum())})", fontsize=10)
         fig.colorbar(im, ax=ax, label="true success %")
         fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_heatmap_{name}_{tag}.png"), dpi=130); plt.close(fig)
 

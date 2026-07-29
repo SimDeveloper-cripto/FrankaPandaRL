@@ -47,7 +47,9 @@ from _common import (results_dir, REPO_ROOT, json_default, resolve_run_dir,  # n
 PRESETS = {
     "quick":    dict(evaluate=30,  phase=15, robust=60,  ablation=15),
     "standard": dict(evaluate=100, phase=30, robust=150, ablation=30),
-    "full":     dict(evaluate=200, phase=50, robust=300, ablation=50),
+    # `phase` alzato a 100: con 30 episodi gli istogrammi T5/T6/T7 restano spigolosi e
+    # poco leggibili in stampa. Costa ~35 s in più.
+    "full":     dict(evaluate=200, phase=100, robust=300, ablation=50),
 }
 ALL_SUITES = ["functional", "physics", "evaluate", "phase", "robustness", "ablation"]
 TAG = "curr1_posa_variabile"
@@ -103,11 +105,13 @@ BIBLIO = """\
 3. Colas et al. (2019) *A Hitchhiker's Guide to Statistical Comparisons of RL Algorithms.* arXiv:1904.06979
    — correzione per test multipli (Holm-Bonferroni).
 4. Henderson et al. (2018) *Deep Reinforcement Learning that Matters.* AAAI — riproducibilità e varianza.
-5. Chan et al. (2020) *Measuring the Reliability of RL Algorithms.* ICLR — dispersione (IQR) e rischio (CVaR).
+5. Chan et al. (2020) *Measuring the Reliability of RL Algorithms.* ICLR — dispersione (IQR) e rischio come metriche di prima classe.
+5b. Rockafellar & Uryasev (2000) *Optimization of Conditional Value-at-Risk.* Journal of Risk 2(3) — definizione del CVaR usato sul decile peggiore.
 6. Patterson et al. (2024) *Empirical Design in Reinforcement Learning.* JMLR 25(318) — disegno
    controllato, confronti appaiati/blocked.
 7. Wilson (1927); Brown, Cai & DasGupta (2001) — intervallo di Wilson per proporzioni.
 8. Newcombe (1998) — intervallo di confidenza per la differenza di proporzioni.
+8b. Holm (1979) *A Simple Sequentially Rejective Multiple Test Procedure.* Scand. J. Statist. 6(2) — correzione applicata ai 7 confronti dell'ablazione.
 
 **Contributi v2 dell'apertura (ablazionati / diagnosticati)**
 9.  Ng, Russell & Harada (1999) *Policy Invariance Under Reward Transformations* — potential-based
@@ -205,6 +209,21 @@ def build_report(meta, suites):
                      f"| {m['open_error_end_iqm']['point']:.4f} "
                      f"| {_fmt_ci(m['stuck_on_handle']['ci'])} |")
         det = ev["result"].get("det")
+        triv = (det or {}).get("trivial_reference")
+        if triv:
+            L.append(f"\n**Riferimento banale.** Una policy costante che ignora il goal e "
+                     f"spalanca sempre fino al fine corsa otterrebbe "
+                     f"**{triv['hits']}/{triv['n']} = {triv['rate']*100:.1f}%** "
+                     f"[{triv['ci']['lo']*100:.1f}, {triv['ci']['hi']*100:.1f}] sugli stessi "
+                     f"goal, perché con `open_tol = {triv['open_tol']}` il fine corsa cade "
+                     f"dentro la tolleranza per buona parte dei goal campionati. "
+                     f"La policy addestrata guadagna "
+                     f"**{(det['true_success_rate']['point'] - triv['rate'])*100:+.1f} punti** "
+                     f"sul solo criterio dell'angolo: il grosso del `true_success` è spiegato "
+                     f"dalla geometria del compito, non dall'apprendimento. È un difetto di "
+                     f"**specifica della metrica**, non della policy — che infatti risolve la "
+                     f"manipolazione (afferrare, aprire, mantenere, rilasciare) nel 100% "
+                     f"degli episodi.")
         if det:
             L.append("\n**Terminazioni (eval deterministico)** — la distinzione PULITA / "
                      "ESOGENA / HARD-CAP è la diagnosi del ritiro:\n")
@@ -228,11 +247,16 @@ def build_report(meta, suites):
         L.append(f"| T4 torsione polso in RETREAT (IQM) | {(t4.get('iqm') or {}).get('point', float('nan')):.3f} |")
         L.append(f"| T5a open_error alla transizione (media) | {t5a.get('mean', float('nan')):.4f} rad |")
         L.append(f"| T5b latch alla transizione (media) | {t5b.get('mean', float('nan')):+.3f} rad |")
-        L.append(f"| T6 step fuori tolleranza in HOLD_OPEN | {t6.get('n', '?')} "
-                 f"(oltre il goal: {t6.get('n_overshoot', '?')}, sotto: {t6.get('n_regress', '?')}; "
-                 f"severi: {t6.get('severe', '?')}) |")
+        L.append(f"| T6 episodi con scostamenti in HOLD_OPEN | "
+                 f"{t6.get('episodes_with_overshoot','?')} oltre il goal / "
+                 f"{t6.get('episodes_with_regress','?')} sotto, su {t6.get('n_episodes','?')} |")
+        _dom = t6.get('top3_episode_share')
+        L.append(f"| T6 step fuori tolleranza (non episodio-pesato) | {t6.get('n', '?')} "
+                 f"(oltre: {t6.get('n_overshoot', '?')}, sotto: {t6.get('n_regress', '?')})"
+                 + (f" — i 3 episodi peggiori pesano il {_dom*100:.0f}%" if _dom else "") + " |")
         L.append(f"| T7 allontanamento in RETREAT (IQM) | {(t7.get('iqm') or {}).get('point', float('nan')):.4f} m |")
-        L.append(f"| T7 episodi fermi sulla maniglia | {_fmt_ci(t7.get('stuck_ci'))} |")
+        L.append(f"| T7 episodi fermi sulla maniglia | {_fmt_ci(t7.get('stuck_ci'))} "
+                 f"(su {t7.get('n_retreat_episodes','?')} che raggiungono il RETREAT) |")
         L.append("\nGrafici: `results/phase/`.\n")
 
     rb = suites.get("robustness")
@@ -268,7 +292,44 @@ def build_report(meta, suites):
                      f"{cs['diff']['point']*100:+.1f} pt | "
                      f"{cs.get('fisher_p_holm', float('nan')):.3g} |")
         L.append("\nForest plot: `results/ablation/`.\n")
+        L.append("> **Due precisazioni obbligatorie.**\n>\n"
+                 "> 1. **«Nessun effetto» non è dimostrato** per i bracci non significativi. "
+                 "Con n = 30 gli intervalli sono ampi decine di punti: si può escludere un "
+                 "effetto *grande*, non un effetto. La formulazione corretta è «nessun "
+                 "effetto **rilevabile a questa numerosità**».\n>\n"
+                 "> 2. **È un'ablazione del controllore dispiegato, non dell'algoritmo di "
+                 "apprendimento.** Gli override vengono disattivati su una policy *già "
+                 "addestrata con quegli override attivi*: si misura quanto il comportamento "
+                 "finale ne dipende — domanda legittima e ben posta — ma **non** che senza di "
+                 "essi non si sarebbe potuto imparare qualcos'altro.\n")
 
+    L.append("## Limiti dichiarati\n")
+    L.append("Sono limiti di **disegno**, non di esecuzione: dichiararli è parte del "
+             "risultato (Henderson et al. 2018).\n")
+    L.append("| # | limite | conseguenza | cosa servirebbe |")
+    L.append("|---|---|---|---|")
+    L.append("| 1 | **Un solo seed di addestramento** | gli intervalli descrivono la "
+             "variabilità fra **episodi**, non fra **seed**: le conclusioni valgono per "
+             "*questa* policy, non per il metodo | ≥5 seed e aggregazione fra run "
+             "(Agarwal et al. 2021; Colas et al. 2018) |")
+    L.append("| 2 | **Ablazione del controllore dispiegato** | misura quanto la policy "
+             "*dipende* dagli override, non se senza di essi non si potesse imparare "
+             "altro | un ri-addestramento per variante |")
+    trv = ((ev or {}).get("result", {}) or {}).get("det", {}).get("trivial_reference") \
+        if (ev and ev.get("status") == "ok") else None
+    if trv:
+        L.append(f"| 3 | **La metrica è poco selettiva** | una policy che ignora il goal "
+                 f"otterrebbe già {trv['rate']*100:.0f}%: il `true_success` misura in gran "
+                 f"parte la geometria del compito | tolleranza più stretta o goal campionati "
+                 f"più lontano dal fine corsa |")
+    L.append("| 4 | **Numerosità** | con 100 episodi differenze sotto ~6 punti non sono "
+             "risolvibili; le fasce di robustezza (n≈25) non escludono dipendenze fino a "
+             "~15 punti | `--preset full` |")
+    L.append("| 5 | **T4 non separa policy e override** | la torsione del polso in RETREAT "
+             "è in larga parte imposta dall'ambiente | registrare l'azione pre-override |")
+    L.append("| 6 | **T1/T2 sulla porta base** | descrivono il regime nominale, non tutti i "
+             "regimi campionati | ripetere i test fisici sotto randomizzazione |")
+    L.append("")
     L.append("---\n"); L.append(BIBLIO)
     return "\n".join(L)
 

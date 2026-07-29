@@ -47,8 +47,42 @@ from _common import (make_raw_env, load_obs_rms, load_model, rollout_episode,
 import stats_utils as S
 
 
-def run_eval(n_episodes, deterministic, curriculum, run_dir, base_seed=10_000):
-    env, _cfg = make_raw_env(curriculum_level=curriculum, run_dir=run_dir)
+# ─────────────────────────────────────────────────────────────────────────────
+# Riferimento banale (controllo di significatività del compito)
+# ─────────────────────────────────────────────────────────────────────────────
+def trivial_open_reference(records, open_tol):
+    """Tasso che otterrebbe una policy COSTANTE che ignora il goal e spalanca sempre.
+
+    Perché serve: `open_tol` è una frazione non trascurabile del range di apertura e i goal
+    sono campionati vicino al fine corsa, quindi **il fine corsa cade dentro la tolleranza
+    per buona parte dei goal**. Senza questo riferimento, un true success dell'80% sembra un
+    risultato di apprendimento; confrontato con il banale si vede quanta parte della metrica
+    è spiegata dalla sola geometria del compito.
+
+    È il controllo più economico che esista ed è quello che manca più spesso: una policy
+    addestrata va confrontata con la politica non addestrata più ovvia, non solo con zero
+    (Henderson et al. 2018; Patterson et al. 2024).
+
+    Valutato sugli STESSI goal degli episodi reali → confronto appaiato.
+
+    NB: è un LIMITE SUPERIORE sul solo criterio dell'angolo. La policy banale dovrebbe
+    comunque afferrare, mantenere e ritirarsi; qui si assume che ci riesca sempre. Il
+    confronto è quindi conservativo *a sfavore* della policy addestrata.
+    """
+    goals = np.array([r.goal_angle for r in records], float)
+    caps = np.array([r.effective_max for r in records], float)
+    ok = np.isfinite(goals) & np.isfinite(caps)
+    if not ok.any():
+        return None
+    hits = int((np.abs(caps[ok] - goals[ok]) <= open_tol).sum())
+    n = int(ok.sum())
+    return dict(hits=hits, n=n, rate=hits / n, ci=S.wilson_ci(hits, n).as_dict(),
+                cap=float(np.nanmedian(caps[ok])), open_tol=float(open_tol))
+
+
+def run_eval(n_episodes, deterministic, curriculum, run_dir, base_seed=10_000,
+             return_cfg=False):
+    env, cfg = make_raw_env(curriculum_level=curriculum, run_dir=run_dir)
     obs_rms = load_obs_rms(run_dir=run_dir)
     model = load_model(run_dir=run_dir)
 
@@ -65,10 +99,10 @@ def run_eval(n_episodes, deterministic, curriculum, run_dir, base_seed=10_000):
         env.close()
     except Exception:
         pass
-    return records
+    return (records, cfg) if return_cfg else records
 
 
-def summarize(records, mode_name, curriculum):
+def summarize(records, mode_name, curriculum, open_tol=0.05):
     n = len(records)
     succ = sum(r.success for r in records)
     tsucc = sum(r.true_success for r in records)
@@ -86,6 +120,8 @@ def summarize(records, mode_name, curriculum):
     oe_iqm = S.bootstrap_ci(open_end, "iqm")
     om_iqm = S.bootstrap_ci(open_min, "iqm")
     mv_iqm = S.bootstrap_ci(moved, "iqm")
+
+    trivial = trivial_open_reference(records, open_tol)
 
     fail_counts = Counter(r.failure_type for r in records)
     failure_breakdown = {ft: dict(count=fail_counts.get(ft, 0),
@@ -119,6 +155,7 @@ def summarize(records, mode_name, curriculum):
         max_phase_distribution={p: phase_counts.get(p, 0) for p in PHASE_NAMES},
         failure_breakdown=failure_breakdown,
         termination_breakdown=termination_breakdown,
+        trivial_reference=trivial,
         goal_angle=dict(mean=float(np.mean([r.goal_angle for r in records])),
                         min=float(np.min([r.goal_angle for r in records])),
                         max=float(np.max([r.goal_angle for r in records]))),
@@ -130,6 +167,13 @@ def summarize(records, mode_name, curriculum):
     print(f"  Success (permissivo, fase≥HOLD_OPEN) : {sr}")
     print(f"  True success (al goal + leva neutra) : {tsr}")
     print(f"  Clean success (+ ritiro reale)       : {csr}")
+    if trivial:
+        delta = (tsr.point - trivial["rate"]) * 100
+        print(f"  RIFERIMENTO BANALE (spalanca sempre) : "
+              f"{trivial['hits']}/{trivial['n']} = {trivial['rate']*100:.1f}% "
+              f"[{trivial['ci']['lo']*100:.1f}, {trivial['ci']['hi']*100:.1f}]")
+        print(f"  → guadagno della policy addestrata    : {delta:+.1f} punti "
+              f"(sul solo criterio dell'angolo)")
     print(f"  Lunghezza episodio (IQM)             : {len_iqm}")
     print(f"  Lunghezza, CVaR peggior 10%          : {summary['length_cvar_worst10']:.1f} step")
     print(f"  open_error finale (IQM)              : {oe_iqm}")
@@ -169,11 +213,24 @@ def make_plots(det_records, det_summary, sto_records, sto_summary, outdir, curri
         errs = np.clip([[(v["point"] - v["lo"]) * 100 for v in vals],
                         [(v["hi"] - v["point"]) * 100 for v in vals]], 0, None)
         ax.bar(x + (j - 1) * w, pts, w, yerr=errs, capsize=5, label=lab, color=col)
+    # RIFERIMENTO BANALE: una policy che ignora il goal e spalanca sempre. Senza questa
+    # linea l'80% sembra tutto merito dell'apprendimento (Henderson et al. 2018).
+    triv = det_summary.get("trivial_reference")
+    if triv:
+        ax.axhline(triv["rate"] * 100, ls=":", lw=2, color="#7f7f7f",
+                   label=f"banale «spalanca sempre» ({triv['rate']*100:.0f}%)")
     ax.set_xticks(x); ax.set_xticklabels(["Eval det", "Train sto"])
     ax.set_ylabel("Tasso (%)"); ax.set_ylim(0, 105)
+    # se true e clean coincidono va DETTO: sembrerebbe un errore di plottaggio
+    coincide = (abs(det_summary["true_success_rate"]["point"]
+                    - det_summary["clean_success_rate"]["point"]) < 1e-9
+                and abs(sto_summary["true_success_rate"]["point"]
+                        - sto_summary["clean_success_rate"]["point"]) < 1e-9)
+    nota = ("\ntrue e clean COINCIDONO: ogni volta che la porta è al goal il ritiro riesce"
+            if coincide else "")
     ax.set_title(f"Successo a tre livelli ± Wilson 95% CI ({tag})\n"
-                 "il divario permissivo→true→clean è la diagnosi del ritiro")
-    ax.legend()
+                 "il divario permissivo→true→clean è la diagnosi del ritiro" + nota)
+    ax.legend(fontsize=8)
     fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_success_{tag}.png"), dpi=130); plt.close(fig)
 
     # 2) distribuzione fase massima
@@ -201,7 +258,9 @@ def make_plots(det_records, det_summary, sto_records, sto_summary, outdir, curri
             means.append(ci.point); elo.append(max(0.0, ci.point - ci.lo)); ehi.append(max(0.0, ci.hi - ci.point))
         ax.bar(xs + (j - 0.5) * w, means, w, yerr=[elo, ehi], capsize=4, label=name, color=col)
     ax.set_xticks(xs); ax.set_xticklabels(PHASE_NAMES)
-    ax.set_ylabel("Step medi"); ax.set_title(f"Tempo per fase (media ± bootstrap 95% CI) ({tag})")
+    ax.set_ylabel("Step medi")
+    ax.set_title(f"Tempo per fase (media ± bootstrap 95% CI) ({tag})\n"
+                 "un intervallo largo È il segnale: indica episodi eterogenei in quella fase")
     ax.legend()
     fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_phase_time_{tag}.png"), dpi=130); plt.close(fig)
 
@@ -210,9 +269,16 @@ def make_plots(det_records, det_summary, sto_records, sto_summary, outdir, curri
     axes[0].boxplot([[r.length for r in det_records], [r.length for r in sto_records]],
                     labels=["det", "sto"], showmeans=True)
     axes[0].set_title("Lunghezza episodio"); axes[0].set_ylabel("step")
-    axes[1].boxplot([[r.open_error_end for r in det_records], [r.open_error_end for r in sto_records]],
-                    labels=["det", "sto"], showmeans=True)
-    axes[1].set_title("open_error finale"); axes[1].set_ylabel("rad")
+    # ERRORE CON SEGNO, non |open_error|: il valore assoluto nasconde la direzione, che è
+    # l'intera diagnosi (sopra lo zero = aperta troppo, sotto = ricaduta).
+    sd = [r.door_angle_end - r.goal_angle for r in det_records]
+    ss = [r.door_angle_end - r.goal_angle for r in sto_records]
+    axes[1].boxplot([sd, ss], labels=["det", "sto"], showmeans=True)
+    axes[1].axhline(0.0, color="k", lw=0.8)
+    tol = det_summary.get("trivial_reference", {}).get("open_tol", 0.05) if det_summary.get("trivial_reference") else 0.05
+    axes[1].axhline(tol, ls="--", color="k"); axes[1].axhline(-tol, ls="--", color="k")
+    axes[1].set_title("errore CON SEGNO (angolo − goal)\nsopra 0 = aperta troppo")
+    axes[1].set_ylabel("rad")
     axes[2].boxplot([[r.retreat_moved_max for r in det_records],
                      [r.retreat_moved_max for r in sto_records]],
                     labels=["det", "sto"], showmeans=True)
@@ -249,9 +315,17 @@ def make_plots(det_records, det_summary, sto_records, sto_summary, outdir, curri
     boots = rng.choice(succ, size=(10_000, len(succ)), replace=True).mean(axis=1)
     safe_hist(ax, boots * 100, 40, color="#2ca02c", alpha=0.85)
     sr = det_summary["true_success_rate"]
-    ax.axvline(sr["lo"] * 100, color="k", ls="--"); ax.axvline(sr["hi"] * 100, color="k", ls="--")
+    ax.axvline(sr["lo"] * 100, color="k", ls="--",
+               label=f"CI di Wilson (analitico): [{sr['lo']*100:.1f}, {sr['hi']*100:.1f}]")
+    ax.axvline(sr["hi"] * 100, color="k", ls="--")
+    lo_b, hi_b = np.percentile(boots, [2.5, 97.5]) * 100
+    ax.axvline(lo_b, color="#d62728", ls="-.",
+               label=f"percentili bootstrap: [{lo_b:.1f}, {hi_b:.1f}]")
+    ax.axvline(hi_b, color="#d62728", ls="-.")
     ax.set_xlabel("True success bootstrap (%)"); ax.set_ylabel("frequenza")
-    ax.set_title(f"Distribuzione bootstrap del true success — Eval det ({tag})")
+    ax.legend(fontsize=8)
+    ax.set_title(f"Distribuzione bootstrap del true success — Eval det ({tag})\n"
+                 "due stimatori indipendenti a confronto: la concordanza è la garanzia")
     fig.tight_layout(); fig.savefig(os.path.join(outdir, f"plot_bootstrap_{tag}.png"), dpi=130); plt.close(fig)
 
 
@@ -262,11 +336,12 @@ def run(episodes=200, curriculum=CURRICULUM, run_dir=None, seed=10_000,
     outdir = results_dir("evaluate")
 
     print(f"[{tag}] Valutazione EVAL (deterministica)…")
-    det = run_eval(episodes, True, curriculum, run_dir, seed)
-    det_sum = summarize(det, "Eval (deterministica)", curriculum)
+    det, cfg = run_eval(episodes, True, curriculum, run_dir, seed, return_cfg=True)
+    open_tol = float(getattr(cfg, "open_tol_rad", 0.05))
+    det_sum = summarize(det, "Eval (deterministica)", curriculum, open_tol)
     print(f"[{tag}] Valutazione TRAIN (stocastica)…")
     sto = run_eval(episodes, False, curriculum, run_dir, seed)
-    sto_sum = summarize(sto, "Train (stocastica)", curriculum)
+    sto_sum = summarize(sto, "Train (stocastica)", curriculum, open_tol)
 
     for t, summ, recs in [("det", det_sum, det), ("sto", sto_sum, sto)]:
         with open(os.path.join(outdir, f"metrics_{t}_{tag}.json"), "w") as f:

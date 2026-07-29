@@ -83,11 +83,18 @@ mjpython open_generalized_v2/train_curriculum_v2 --total-steps 1500000
 
 # Play (only curr 1)
 mjpython open_generalized_v2/train_curriculum_v2 --play
+
+# Run Test Suite
+mjpython scratch/test_open_task_v2/run_all_tests.py --preset full
 ```
 
-### Result Folders (models)
+### Result Folders (trained models)
 
 - [OK] Generalized Door Closing Task __runs/close_gen__
 - [OK] Generalization of the Generalized Door Closing Task (curr 0) __runs/close_gen_v2_curriculum_0_new_110626/__
 - [OK] Generalization of the Generalized Door Closing Task (curr 1) __runs/close_gen_v2_curriculum_1_new_110626/__
 - [OK] Generalization of the Generalized Door Opening Task (curr 1) __runs/open_gen_v2/__
+
+### Test Results Folders (trained models)
+
+- [OK] __scratch/__

@@ -225,6 +225,9 @@ def realized_domain_params(env) -> dict:
         door_mass_ratio=float(getattr(dr, "current_door_mass", base_m) / base_m),
         door_x=door_x,
         goal_angle=float(getattr(env, "_goal_angle", float("nan"))),
+        # fine corsa effettivo dell'apertura: serve a calcolare il RIFERIMENTO BANALE
+        # (una policy che ignora il goal e spalanca sempre) sugli stessi episodi.
+        effective_max=float(getattr(env, "_effective_max", float("nan"))),
     )
 
 
@@ -335,6 +338,7 @@ class EpisodeRecord:
     door_mass_ratio: float
     door_x: float
     goal_angle: float
+    effective_max: float
     seed: int
     # tracce (solo con collect_trace=True)
     hold_action_norms: list = field(default_factory=list)
@@ -450,7 +454,7 @@ def rollout_episode(env, model, obs_rms, deterministic: bool = True,
         latch_stiffness_ratio=dom0["latch_stiffness_ratio"],
         hinge_damping_ratio=dom0["hinge_damping_ratio"],
         door_mass_ratio=dom0["door_mass_ratio"], door_x=dom0["door_x"],
-        goal_angle=dom0["goal_angle"], seed=seed,
+        goal_angle=dom0["goal_angle"], effective_max=dom0["effective_max"], seed=seed,
         hold_action_norms=hold_norms, retreat_wrist_rots=wrist_rots,
         regress_events=regress, retreat_moved_trace=moved_trace,
         open_error_at_transition=open_err_at_transition,

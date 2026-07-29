@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-07-28T14:30:38",
-  "repo_root": "/.../.../.../FrankaPandaRL",
-  "git_commit": "7520ed7",
+  "timestamp": "2026-07-29T08:47:27",
+  "repo_root": "/Users/simone/workspace/FrankaPandaRL",
+  "git_commit": "9543781",
   "run_dir": "runs/open_gen_v2",
-  "model": "/.../.../.../FrankaPandaRL/runs/open_gen_v2/best_model.zip",
+  "model": "/Users/simone/workspace/FrankaPandaRL/runs/open_gen_v2/best_model.zip",
   "curriculum": 1.0,
   "python": "3.10.20",
   "platform": "macOS-26.5.2-arm64-arm-64bit",
@@ -16,7 +16,7 @@
     "gymnasium": "1.2.3"
   },
   "args": {
-    "preset": "standard",
+    "preset": "full",
     "episodes": null,
     "suites": [
       "functional",

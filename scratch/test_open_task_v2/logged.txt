@@ -1,0 +1,765 @@
+##############################################################################
+# SUITE: test_retreat_overrides
+##############################################################################
+PASS  A config: §1.17=True §1.21(steps)=8 §1.43=True §1.46=True §1.50=True
+PASS  B §1.46 riporto: traslazione tangente ×0.150 + rotazione polso ×0.5, rampa/free azzerati, contatore riporto → 1
+PASS  C §1.50 gabbia: bang-bang sulla larghezza reale attorno a 0.055 m (largo→+1, stretto→-1)
+PASS  D §1.47 fine riporto: leva scarica → riporto concluso e retreat_pos invalidato
+PASS  E §1.51 rampa riporto: oltre 4 step la magnitudine satura a 0.600
+PASS  F §1.51 guardia qvel: porta in moto → comando smorzato al pavimento 0.25, mai a zero
+PASS  G §1.17 rilascio pulito: dita non libere → braccio congelato + gripper in apertura, rampa e durata utile azzerate
+PASS  H §1.21 rampa: 1° step → braccio × (1/8), contatore → 1
+PASS  I §1.21 rampa: 5° step → braccio × (5/8) (lineare)
+PASS  J §1.21 oltre 8 step → azione del braccio piena e invariata
+PASS  K §1.21 interruttore: retreat_rampup_steps = 0 → nessuna rampa
+PASS  L §1.43 escape: braccio guidato verso retreat_pos (|a|=1.00), polso azzerato, rampa tenuta a 0
+PASS  M §1.43→§1.21: superata la distanza di sfilamento (0.15 m) la guida cede il passo alla rampa
+PASS  N §1.46 interruttore: retreat_restore_enabled = False → nessun riporto, si passa direttamente al rilascio/rampa
+PASS  O §1.43 interruttore: retreat_escape_enabled = False → nessuna guida, solo rampa
+PASS  P sicurezza: dopo il rilascio il gripper è SEMPRE in apertura (−1) anche se la policy chiede di chiudere; la rampa scala solo il braccio
+
+================================================================
+ESITO override RETREAT (apertura v2): 16/16 — TUTTI PASS
+================================================================
+[OK] test_retreat_overrides in 0.0s
+
+##############################################################################
+# SUITE: physics_unit_tests
+##############################################################################
+============================================================================
+PHYSICS UNIT TESTS — APERTURA v2 (deterministici, senza modello)
+============================================================================
+  T1 molla latch    : sotto 0.15 in 15 step, sotto 0.05 in 18 step (giunto=Door_latch_joint, k=1.000, c=0.000) → PASS
+  T2 ritenzione     : deriva libera=-0.0000 rad (tol 0.05), con impulso=0.1786 rad [seed 12345, 1 tentativi] → PASS
+  [nota] finestra di normalizzazione della frizione [0.24, 0.96] contro range reale [0.304, 1.198]: 28.0% dei campioni satura -> soglia di presa adattiva §3.1 inattiva in quella frazione
+  T7 domain rand    : raggio∈[0.0140,0.0280] frizione∈[0.304,1.198] latch×∈[0.52,1.99] damp×∈[0.31,1.48] massa×∈[0.50,2.00] → PASS
+  T8 goal sampling  : goal∈[0.3402,0.3992] atteso⊆[0.3400,0.4000] → PASS
+----------------------------------------------------------------------------
+  ESITO: 4/4 PASS
+============================================================================
+  Grafici in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/physics
+[OK] physics_unit_tests in 9.3s
+
+##############################################################################
+# SUITE: evaluate_policy
+##############################################################################
+[curr1_posa_variabile] Valutazione EVAL (deterministica)…
+  ep   1/200 | succ=True true=False clean=False | len=137 | open_err=0.0539 | latch=+0.017 | mosso=0.202m | PULITA | RETREAT overshoot (oltre il goal)
+  ep   2/200 | succ=True true=False clean=False | len=139 | open_err=0.0527 | latch=+0.001 | mosso=0.197m | PULITA | RETREAT overshoot (oltre il goal)
+  ep   3/200 | succ=True true=True clean=True | len=143 | open_err=0.0062 | latch=+0.028 | mosso=0.185m | PULITA | SUCCESS
+  ep   4/200 | succ=True true=True clean=True | len=150 | open_err=0.0466 | latch=-0.005 | mosso=0.202m | PULITA | SUCCESS
+  ep   5/200 | succ=True true=True clean=True | len=154 | open_err=0.0046 | latch=+0.016 | mosso=0.186m | PULITA | SUCCESS
+  ep   6/200 | succ=True true=True clean=True | len=160 | open_err=0.0421 | latch=+0.009 | mosso=0.194m | PULITA | SUCCESS
+  ep   7/200 | succ=True true=True clean=True | len=133 | open_err=0.0222 | latch=+0.014 | mosso=0.188m | PULITA | SUCCESS
+  ep   8/200 | succ=True true=False clean=False | len=168 | open_err=0.0077 | latch=-0.367 | mosso=0.167m | ESOGENA | RETREAT latch not neutral
+  ep   9/200 | succ=True true=True clean=True | len=145 | open_err=0.0224 | latch=+0.084 | mosso=0.134m | PULITA | SUCCESS
+  ep  10/200 | succ=True true=True clean=True | len=158 | open_err=0.0075 | latch=+0.018 | mosso=0.188m | PULITA | SUCCESS
+  ep  11/200 | succ=True true=True clean=True | len=132 | open_err=0.0308 | latch=-0.002 | mosso=0.184m | PULITA | SUCCESS
+  ep  12/200 | succ=True true=True clean=True | len=139 | open_err=0.0054 | latch=-0.001 | mosso=0.163m | PULITA | SUCCESS
+  ep  13/200 | succ=True true=False clean=False | len=146 | open_err=0.0518 | latch=-0.001 | mosso=0.223m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  14/200 | succ=True true=True clean=True | len=137 | open_err=0.0282 | latch=+0.088 | mosso=0.172m | PULITA | SUCCESS
+  ep  15/200 | succ=True true=False clean=False | len=142 | open_err=0.0505 | latch=+0.014 | mosso=0.197m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  16/200 | succ=True true=True clean=True | len=141 | open_err=0.0200 | latch=+0.017 | mosso=0.193m | PULITA | SUCCESS
+  ep  17/200 | succ=True true=True clean=True | len=141 | open_err=0.0467 | latch=+0.002 | mosso=0.197m | PULITA | SUCCESS
+  ep  18/200 | succ=True true=True clean=True | len=159 | open_err=0.0375 | latch=+0.064 | mosso=0.100m | PULITA | SUCCESS
+  ep  19/200 | succ=True true=True clean=True | len=141 | open_err=0.0020 | latch=+0.141 | mosso=0.169m | PULITA | SUCCESS
+  ep  20/200 | succ=True true=True clean=True | len=129 | open_err=0.0256 | latch=+0.002 | mosso=0.184m | PULITA | SUCCESS
+  ep  21/200 | succ=True true=True clean=True | len=128 | open_err=0.0248 | latch=+0.007 | mosso=0.169m | PULITA | SUCCESS
+  ep  22/200 | succ=True true=False clean=False | len=600 | open_err=0.0628 | latch=+0.933 | mosso=0.000m | troncata a orizzonte | HOLD_OPEN regress / timeout
+  ep  23/200 | succ=True true=False clean=False | len=152 | open_err=0.0500 | latch=+0.078 | mosso=0.150m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  24/200 | succ=True true=True clean=True | len=142 | open_err=0.0105 | latch=+0.034 | mosso=0.189m | PULITA | SUCCESS
+  ep  25/200 | succ=True true=True clean=True | len=141 | open_err=0.0413 | latch=+0.008 | mosso=0.201m | PULITA | SUCCESS
+  ep  26/200 | succ=True true=True clean=True | len=147 | open_err=0.0112 | latch=+0.025 | mosso=0.190m | PULITA | SUCCESS
+  ep  27/200 | succ=True true=True clean=True | len=144 | open_err=0.0472 | latch=+0.037 | mosso=0.168m | PULITA | SUCCESS
+  ep  28/200 | succ=True true=True clean=True | len=154 | open_err=0.0323 | latch=+0.053 | mosso=0.190m | PULITA | SUCCESS
+  ep  29/200 | succ=True true=True clean=True | len=145 | open_err=0.0413 | latch=+0.017 | mosso=0.183m | PULITA | SUCCESS
+  ep  30/200 | succ=True true=True clean=True | len=142 | open_err=0.0252 | latch=+0.013 | mosso=0.180m | PULITA | SUCCESS
+  ep  31/200 | succ=True true=True clean=True | len=147 | open_err=0.0127 | latch=+0.022 | mosso=0.185m | PULITA | SUCCESS
+  ep  32/200 | succ=True true=True clean=True | len=138 | open_err=0.0068 | latch=+0.009 | mosso=0.186m | PULITA | SUCCESS
+  ep  33/200 | succ=True true=True clean=True | len=145 | open_err=0.0073 | latch=+0.024 | mosso=0.195m | PULITA | SUCCESS
+  ep  34/200 | succ=True true=True clean=True | len=141 | open_err=0.0324 | latch=+0.031 | mosso=0.173m | PULITA | SUCCESS
+  ep  35/200 | succ=True true=True clean=True | len=140 | open_err=0.0051 | latch=+0.011 | mosso=0.187m | PULITA | SUCCESS
+  ep  36/200 | succ=True true=True clean=True | len=136 | open_err=0.0467 | latch=+0.066 | mosso=0.179m | PULITA | SUCCESS
+  ep  37/200 | succ=True true=True clean=True | len=146 | open_err=0.0426 | latch=-0.005 | mosso=0.196m | PULITA | SUCCESS
+  ep  38/200 | succ=True true=True clean=True | len=142 | open_err=0.0083 | latch=+0.011 | mosso=0.185m | PULITA | SUCCESS
+  ep  39/200 | succ=True true=True clean=True | len=147 | open_err=0.0214 | latch=+0.001 | mosso=0.190m | PULITA | SUCCESS
+  ep  40/200 | succ=True true=True clean=True | len=149 | open_err=0.0221 | latch=+0.013 | mosso=0.182m | PULITA | SUCCESS
+  ep  41/200 | succ=True true=True clean=True | len=155 | open_err=0.0378 | latch=+0.027 | mosso=0.207m | PULITA | SUCCESS
+  ep  42/200 | succ=True true=True clean=True | len=154 | open_err=0.0433 | latch=+0.011 | mosso=0.190m | PULITA | SUCCESS
+  ep  43/200 | succ=True true=False clean=False | len=148 | open_err=0.0569 | latch=+0.012 | mosso=0.187m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  44/200 | succ=True true=True clean=True | len=145 | open_err=0.0314 | latch=+0.019 | mosso=0.185m | PULITA | SUCCESS
+  ep  45/200 | succ=True true=True clean=True | len=136 | open_err=0.0064 | latch=+0.027 | mosso=0.190m | PULITA | SUCCESS
+  ep  46/200 | succ=True true=False clean=False | len=149 | open_err=0.0509 | latch=+0.040 | mosso=0.187m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  47/200 | succ=True true=True clean=True | len=138 | open_err=0.0438 | latch=+0.032 | mosso=0.178m | PULITA | SUCCESS
+  ep  48/200 | succ=True true=True clean=True | len=154 | open_err=0.0293 | latch=+0.011 | mosso=0.197m | PULITA | SUCCESS
+  ep  49/200 | succ=True true=True clean=True | len=131 | open_err=0.0487 | latch=+0.005 | mosso=0.203m | PULITA | SUCCESS
+  ep  50/200 | succ=True true=False clean=False | len=600 | open_err=0.0780 | latch=+1.062 | mosso=0.000m | troncata a orizzonte | HOLD_OPEN regress / timeout
+  ep  51/200 | succ=True true=True clean=True | len=130 | open_err=0.0263 | latch=+0.012 | mosso=0.176m | PULITA | SUCCESS
+  ep  52/200 | succ=True true=True clean=True | len=143 | open_err=0.0128 | latch=-0.004 | mosso=0.193m | PULITA | SUCCESS
+  ep  53/200 | succ=True true=True clean=True | len=149 | open_err=0.0275 | latch=+0.006 | mosso=0.191m | PULITA | SUCCESS
+  ep  54/200 | succ=True true=True clean=True | len=151 | open_err=0.0471 | latch=+0.003 | mosso=0.194m | PULITA | SUCCESS
+  ep  55/200 | succ=True true=True clean=True | len=131 | open_err=0.0179 | latch=+0.029 | mosso=0.179m | PULITA | SUCCESS
+  ep  56/200 | succ=True true=True clean=True | len=137 | open_err=0.0471 | latch=+0.017 | mosso=0.198m | PULITA | SUCCESS
+  ep  57/200 | succ=True true=True clean=True | len=136 | open_err=0.0166 | latch=+0.012 | mosso=0.179m | PULITA | SUCCESS
+  ep  58/200 | succ=True true=True clean=True | len=135 | open_err=0.0046 | latch=+0.010 | mosso=0.184m | PULITA | SUCCESS
+  ep  59/200 | succ=True true=True clean=True | len=146 | open_err=0.0115 | latch=+0.006 | mosso=0.191m | PULITA | SUCCESS
+  ep  60/200 | succ=True true=True clean=True | len=135 | open_err=0.0068 | latch=+0.022 | mosso=0.184m | PULITA | SUCCESS
+  ep  61/200 | succ=True true=False clean=False | len=144 | open_err=0.0513 | latch=+0.024 | mosso=0.196m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  62/200 | succ=True true=True clean=True | len=150 | open_err=0.0084 | latch=+0.054 | mosso=0.171m | PULITA | SUCCESS
+  ep  63/200 | succ=True true=True clean=True | len=139 | open_err=0.0010 | latch=+0.008 | mosso=0.185m | PULITA | SUCCESS
+  ep  64/200 | succ=True true=True clean=True | len=142 | open_err=0.0369 | latch=+0.009 | mosso=0.203m | PULITA | SUCCESS
+  ep  65/200 | succ=True true=True clean=True | len=142 | open_err=0.0067 | latch=+0.013 | mosso=0.178m | PULITA | SUCCESS
+  ep  66/200 | succ=True true=True clean=True | len=134 | open_err=0.0120 | latch=+0.063 | mosso=0.174m | PULITA | SUCCESS
+  ep  67/200 | succ=True true=True clean=True | len=139 | open_err=0.0486 | latch=+0.019 | mosso=0.203m | PULITA | SUCCESS
+  ep  68/200 | succ=True true=False clean=False | len=146 | open_err=0.0566 | latch=+0.007 | mosso=0.204m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  69/200 | succ=True true=True clean=True | len=142 | open_err=0.0492 | latch=+0.000 | mosso=0.222m | PULITA | SUCCESS
+  ep  70/200 | succ=True true=True clean=True | len=133 | open_err=0.0302 | latch=+0.005 | mosso=0.182m | PULITA | SUCCESS
+  ep  71/200 | succ=True true=True clean=True | len=149 | open_err=0.0154 | latch=+0.009 | mosso=0.180m | PULITA | SUCCESS
+  ep  72/200 | succ=True true=True clean=True | len=140 | open_err=0.0021 | latch=+0.027 | mosso=0.185m | PULITA | SUCCESS
+  ep  73/200 | succ=True true=True clean=True | len=149 | open_err=0.0224 | latch=-0.003 | mosso=0.188m | PULITA | SUCCESS
+  ep  74/200 | succ=True true=False clean=False | len=600 | open_err=0.0827 | latch=+1.071 | mosso=0.000m | troncata a orizzonte | HOLD_OPEN regress / timeout
+  ep  75/200 | succ=True true=True clean=True | len=141 | open_err=0.0121 | latch=+0.089 | mosso=0.132m | PULITA | SUCCESS
+  ep  76/200 | succ=True true=True clean=True | len=152 | open_err=0.0482 | latch=+0.011 | mosso=0.191m | PULITA | SUCCESS
+  ep  77/200 | succ=True true=True clean=True | len=138 | open_err=0.0080 | latch=+0.004 | mosso=0.188m | PULITA | SUCCESS
+  ep  78/200 | succ=True true=True clean=True | len=142 | open_err=0.0401 | latch=+0.016 | mosso=0.189m | PULITA | SUCCESS
+  ep  79/200 | succ=True true=False clean=False | len=161 | open_err=0.0584 | latch=+0.078 | mosso=0.148m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  80/200 | succ=True true=True clean=True | len=149 | open_err=0.0380 | latch=+0.027 | mosso=0.193m | PULITA | SUCCESS
+  ep  81/200 | succ=True true=True clean=True | len=138 | open_err=0.0060 | latch=+0.004 | mosso=0.183m | PULITA | SUCCESS
+  ep  82/200 | succ=True true=True clean=True | len=130 | open_err=0.0272 | latch=+0.005 | mosso=0.184m | PULITA | SUCCESS
+  ep  83/200 | succ=True true=False clean=False | len=158 | open_err=0.0191 | latch=-0.464 | mosso=0.159m | ESOGENA | RETREAT latch not neutral
+  ep  84/200 | succ=True true=True clean=True | len=152 | open_err=0.0103 | latch=+0.015 | mosso=0.178m | PULITA | SUCCESS
+  ep  85/200 | succ=True true=True clean=True | len=137 | open_err=0.0127 | latch=+0.065 | mosso=0.173m | PULITA | SUCCESS
+  ep  86/200 | succ=True true=True clean=True | len=145 | open_err=0.0012 | latch=+0.009 | mosso=0.176m | PULITA | SUCCESS
+  ep  87/200 | succ=True true=False clean=False | len=168 | open_err=0.0466 | latch=-0.215 | mosso=0.169m | ESOGENA | RETREAT latch not neutral
+  ep  88/200 | succ=True true=True clean=True | len=138 | open_err=0.0036 | latch=+0.048 | mosso=0.187m | PULITA | SUCCESS
+  ep  89/200 | succ=True true=False clean=False | len=152 | open_err=0.0581 | latch=+0.018 | mosso=0.200m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  90/200 | succ=True true=True clean=True | len=136 | open_err=0.0258 | latch=+0.016 | mosso=0.184m | PULITA | SUCCESS
+  ep  91/200 | succ=True true=True clean=True | len=148 | open_err=0.0006 | latch=+0.031 | mosso=0.178m | PULITA | SUCCESS
+  ep  92/200 | succ=True true=True clean=True | len=135 | open_err=0.0310 | latch=+0.027 | mosso=0.183m | PULITA | SUCCESS
+  ep  93/200 | succ=True true=True clean=True | len=148 | open_err=0.0414 | latch=+0.128 | mosso=0.137m | PULITA | SUCCESS
+  ep  94/200 | succ=True true=True clean=True | len=151 | open_err=0.0380 | latch=+0.036 | mosso=0.192m | PULITA | SUCCESS
+  ep  95/200 | succ=True true=False clean=False | len=122 | open_err=0.0521 | latch=+0.000 | mosso=0.173m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  96/200 | succ=True true=False clean=False | len=600 | open_err=0.0551 | latch=+0.945 | mosso=0.000m | troncata a orizzonte | HOLD_OPEN regress / timeout
+  ep  97/200 | succ=True true=False clean=False | len=145 | open_err=0.0538 | latch=+0.006 | mosso=0.199m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  98/200 | succ=True true=True clean=True | len=157 | open_err=0.0423 | latch=+0.007 | mosso=0.199m | PULITA | SUCCESS
+  ep  99/200 | succ=True true=True clean=True | len=141 | open_err=0.0177 | latch=+0.148 | mosso=0.094m | PULITA | SUCCESS
+  ep 100/200 | succ=True true=True clean=True | len=145 | open_err=0.0446 | latch=+0.004 | mosso=0.197m | PULITA | SUCCESS
+  ep 101/200 | succ=True true=True clean=True | len=154 | open_err=0.0347 | latch=-0.003 | mosso=0.205m | PULITA | SUCCESS
+  ep 102/200 | succ=True true=False clean=False | len=168 | open_err=0.0077 | latch=-0.269 | mosso=0.169m | ESOGENA | RETREAT latch not neutral
+  ep 103/200 | succ=True true=True clean=True | len=152 | open_err=0.0347 | latch=+0.032 | mosso=0.185m | PULITA | SUCCESS
+  ep 104/200 | succ=True true=False clean=False | len=527 | open_err=0.0518 | latch=+0.005 | mosso=0.201m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 105/200 | succ=True true=False clean=False | len=149 | open_err=0.0501 | latch=+0.129 | mosso=0.182m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 106/200 | succ=True true=True clean=True | len=142 | open_err=0.0484 | latch=+0.010 | mosso=0.193m | PULITA | SUCCESS
+  ep 107/200 | succ=True true=True clean=True | len=143 | open_err=0.0457 | latch=+0.046 | mosso=0.190m | PULITA | SUCCESS
+  ep 108/200 | succ=True true=True clean=True | len=141 | open_err=0.0486 | latch=+0.011 | mosso=0.196m | PULITA | SUCCESS
+  ep 109/200 | succ=True true=True clean=True | len=140 | open_err=0.0001 | latch=+0.004 | mosso=0.189m | PULITA | SUCCESS
+  ep 110/200 | succ=True true=True clean=True | len=131 | open_err=0.0296 | latch=+0.010 | mosso=0.174m | PULITA | SUCCESS
+  ep 111/200 | succ=True true=True clean=True | len=144 | open_err=0.0146 | latch=+0.025 | mosso=0.170m | PULITA | SUCCESS
+  ep 112/200 | succ=True true=True clean=True | len=137 | open_err=0.0325 | latch=+0.043 | mosso=0.176m | PULITA | SUCCESS
+  ep 113/200 | succ=True true=True clean=True | len=150 | open_err=0.0117 | latch=+0.141 | mosso=0.187m | PULITA | SUCCESS
+  ep 114/200 | succ=True true=True clean=True | len=142 | open_err=0.0228 | latch=+0.006 | mosso=0.193m | PULITA | SUCCESS
+  ep 115/200 | succ=True true=True clean=True | len=145 | open_err=0.0012 | latch=+0.067 | mosso=0.182m | PULITA | SUCCESS
+  ep 116/200 | succ=True true=False clean=False | len=392 | open_err=0.0010 | latch=-0.218 | mosso=0.184m | ESOGENA | RETREAT latch not neutral
+  ep 117/200 | succ=True true=False clean=False | len=143 | open_err=0.0537 | latch=+0.026 | mosso=0.187m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 118/200 | succ=True true=True clean=True | len=137 | open_err=0.0029 | latch=+0.030 | mosso=0.182m | PULITA | SUCCESS
+  ep 119/200 | succ=True true=True clean=True | len=144 | open_err=0.0391 | latch=+0.005 | mosso=0.196m | PULITA | SUCCESS
+  ep 120/200 | succ=True true=True clean=True | len=143 | open_err=0.0401 | latch=+0.011 | mosso=0.201m | PULITA | SUCCESS
+  ep 121/200 | succ=True true=True clean=True | len=142 | open_err=0.0046 | latch=+0.005 | mosso=0.180m | PULITA | SUCCESS
+  ep 122/200 | succ=True true=True clean=True | len=149 | open_err=0.0243 | latch=+0.026 | mosso=0.184m | PULITA | SUCCESS
+  ep 123/200 | succ=True true=True clean=True | len=135 | open_err=0.0188 | latch=+0.015 | mosso=0.184m | PULITA | SUCCESS
+  ep 124/200 | succ=True true=True clean=True | len=155 | open_err=0.0107 | latch=+0.094 | mosso=0.170m | PULITA | SUCCESS
+  ep 125/200 | succ=True true=True clean=True | len=137 | open_err=0.0357 | latch=+0.006 | mosso=0.198m | PULITA | SUCCESS
+  ep 126/200 | succ=True true=True clean=True | len=140 | open_err=0.0295 | latch=+0.004 | mosso=0.191m | PULITA | SUCCESS
+  ep 127/200 | succ=True true=True clean=True | len=140 | open_err=0.0073 | latch=+0.027 | mosso=0.175m | PULITA | SUCCESS
+  ep 128/200 | succ=True true=False clean=False | len=155 | open_err=0.0535 | latch=+0.010 | mosso=0.194m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 129/200 | succ=True true=True clean=True | len=151 | open_err=0.0467 | latch=+0.020 | mosso=0.194m | PULITA | SUCCESS
+  ep 130/200 | succ=True true=True clean=True | len=142 | open_err=0.0366 | latch=+0.005 | mosso=0.195m | PULITA | SUCCESS
+  ep 131/200 | succ=True true=True clean=True | len=141 | open_err=0.0042 | latch=-0.002 | mosso=0.192m | PULITA | SUCCESS
+  ep 132/200 | succ=True true=True clean=True | len=136 | open_err=0.0181 | latch=+0.087 | mosso=0.169m | PULITA | SUCCESS
+  ep 133/200 | succ=True true=True clean=True | len=133 | open_err=0.0248 | latch=+0.036 | mosso=0.186m | PULITA | SUCCESS
+  ep 134/200 | succ=True true=True clean=True | len=143 | open_err=0.0040 | latch=-0.049 | mosso=0.155m | PULITA | SUCCESS
+  ep 135/200 | succ=True true=True clean=True | len=141 | open_err=0.0058 | latch=+0.022 | mosso=0.192m | PULITA | SUCCESS
+  ep 136/200 | succ=True true=True clean=True | len=160 | open_err=0.0225 | latch=+0.025 | mosso=0.186m | PULITA | SUCCESS
+  ep 137/200 | succ=True true=True clean=True | len=140 | open_err=0.0249 | latch=+0.013 | mosso=0.176m | PULITA | SUCCESS
+  ep 138/200 | succ=True true=True clean=True | len=131 | open_err=0.0004 | latch=+0.018 | mosso=0.176m | PULITA | SUCCESS
+  ep 139/200 | succ=True true=True clean=True | len=144 | open_err=0.0269 | latch=+0.005 | mosso=0.191m | PULITA | SUCCESS
+  ep 140/200 | succ=True true=True clean=True | len=154 | open_err=0.0204 | latch=+0.016 | mosso=0.191m | PULITA | SUCCESS
+  ep 141/200 | succ=True true=True clean=True | len=146 | open_err=0.0347 | latch=+0.030 | mosso=0.189m | PULITA | SUCCESS
+  ep 142/200 | succ=True true=True clean=True | len=129 | open_err=0.0279 | latch=+0.012 | mosso=0.173m | PULITA | SUCCESS
+  ep 143/200 | succ=True true=True clean=True | len=141 | open_err=0.0403 | latch=+0.010 | mosso=0.190m | PULITA | SUCCESS
+  ep 144/200 | succ=True true=True clean=True | len=137 | open_err=0.0317 | latch=+0.007 | mosso=0.181m | PULITA | SUCCESS
+  ep 145/200 | succ=True true=True clean=True | len=130 | open_err=0.0257 | latch=+0.006 | mosso=0.177m | PULITA | SUCCESS
+  ep 146/200 | succ=True true=True clean=True | len=157 | open_err=0.0453 | latch=+0.016 | mosso=0.190m | PULITA | SUCCESS
+  ep 147/200 | succ=True true=True clean=True | len=128 | open_err=0.0316 | latch=+0.010 | mosso=0.181m | PULITA | SUCCESS
+  ep 148/200 | succ=True true=True clean=True | len=144 | open_err=0.0478 | latch=+0.013 | mosso=0.199m | PULITA | SUCCESS
+  ep 149/200 | succ=True true=True clean=True | len=129 | open_err=0.0353 | latch=-0.001 | mosso=0.176m | PULITA | SUCCESS
+  ep 150/200 | succ=True true=True clean=True | len=152 | open_err=0.0486 | latch=-0.003 | mosso=0.202m | PULITA | SUCCESS
+  ep 151/200 | succ=True true=True clean=True | len=140 | open_err=0.0374 | latch=+0.035 | mosso=0.195m | PULITA | SUCCESS
+  ep 152/200 | succ=True true=True clean=True | len=138 | open_err=0.0274 | latch=+0.117 | mosso=0.186m | PULITA | SUCCESS
+  ep 153/200 | succ=True true=True clean=True | len=155 | open_err=0.0164 | latch=+0.010 | mosso=0.177m | PULITA | SUCCESS
+  ep 154/200 | succ=True true=True clean=True | len=140 | open_err=0.0229 | latch=+0.023 | mosso=0.179m | PULITA | SUCCESS
+  ep 155/200 | succ=True true=True clean=True | len=135 | open_err=0.0362 | latch=+0.019 | mosso=0.176m | PULITA | SUCCESS
+  ep 156/200 | succ=True true=True clean=True | len=136 | open_err=0.0424 | latch=+0.042 | mosso=0.193m | PULITA | SUCCESS
+  ep 157/200 | succ=True true=True clean=True | len=128 | open_err=0.0239 | latch=+0.007 | mosso=0.174m | PULITA | SUCCESS
+  ep 158/200 | succ=True true=False clean=False | len=142 | open_err=0.0532 | latch=+0.031 | mosso=0.188m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 159/200 | succ=True true=True clean=True | len=149 | open_err=0.0485 | latch=+0.015 | mosso=0.194m | PULITA | SUCCESS
+  ep 160/200 | succ=True true=True clean=True | len=136 | open_err=0.0063 | latch=+0.034 | mosso=0.183m | PULITA | SUCCESS
+  ep 161/200 | succ=True true=True clean=True | len=158 | open_err=0.0151 | latch=+0.041 | mosso=0.187m | PULITA | SUCCESS
+  ep 162/200 | succ=True true=False clean=False | len=154 | open_err=0.0556 | latch=-0.001 | mosso=0.207m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 163/200 | succ=True true=True clean=True | len=150 | open_err=0.0487 | latch=+0.033 | mosso=0.202m | PULITA | SUCCESS
+  ep 164/200 | succ=True true=True clean=True | len=138 | open_err=0.0186 | latch=+0.014 | mosso=0.184m | PULITA | SUCCESS
+  ep 165/200 | succ=True true=False clean=False | len=136 | open_err=0.0554 | latch=+0.005 | mosso=0.201m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 166/200 | succ=True true=True clean=True | len=148 | open_err=0.0053 | latch=+0.048 | mosso=0.182m | PULITA | SUCCESS
+  ep 167/200 | succ=True true=True clean=True | len=143 | open_err=0.0308 | latch=+0.022 | mosso=0.184m | PULITA | SUCCESS
+  ep 168/200 | succ=True true=True clean=True | len=141 | open_err=0.0145 | latch=+0.040 | mosso=0.176m | PULITA | SUCCESS
+  ep 169/200 | succ=True true=False clean=False | len=146 | open_err=0.0545 | latch=+0.011 | mosso=0.187m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 170/200 | succ=True true=True clean=True | len=141 | open_err=0.0338 | latch=+0.005 | mosso=0.195m | PULITA | SUCCESS
+  ep 171/200 | succ=True true=True clean=True | len=132 | open_err=0.0231 | latch=+0.022 | mosso=0.183m | PULITA | SUCCESS
+  ep 172/200 | succ=True true=True clean=True | len=295 | open_err=0.0293 | latch=-0.008 | mosso=0.170m | PULITA | SUCCESS
+  ep 173/200 | succ=True true=True clean=True | len=143 | open_err=0.0070 | latch=+0.091 | mosso=0.183m | PULITA | SUCCESS
+  ep 174/200 | succ=True true=True clean=True | len=136 | open_err=0.0084 | latch=+0.028 | mosso=0.180m | PULITA | SUCCESS
+  ep 175/200 | succ=True true=False clean=False | len=187 | open_err=0.0202 | latch=-0.176 | mosso=0.163m | ESOGENA | RETREAT latch not neutral
+  ep 176/200 | succ=True true=True clean=True | len=158 | open_err=0.0031 | latch=+0.022 | mosso=0.181m | PULITA | SUCCESS
+  ep 177/200 | succ=True true=True clean=True | len=138 | open_err=0.0077 | latch=+0.022 | mosso=0.185m | PULITA | SUCCESS
+  ep 178/200 | succ=True true=False clean=False | len=145 | open_err=0.0599 | latch=+0.035 | mosso=0.194m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 179/200 | succ=True true=False clean=False | len=148 | open_err=0.0526 | latch=+0.016 | mosso=0.193m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 180/200 | succ=True true=True clean=True | len=140 | open_err=0.0337 | latch=+0.001 | mosso=0.181m | PULITA | SUCCESS
+  ep 181/200 | succ=True true=True clean=True | len=152 | open_err=0.0149 | latch=+0.013 | mosso=0.189m | PULITA | SUCCESS
+  ep 182/200 | succ=True true=False clean=False | len=139 | open_err=0.0517 | latch=+0.019 | mosso=0.186m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 183/200 | succ=True true=True clean=True | len=147 | open_err=0.0018 | latch=+0.143 | mosso=0.177m | PULITA | SUCCESS
+  ep 184/200 | succ=True true=True clean=True | len=129 | open_err=0.0399 | latch=+0.001 | mosso=0.188m | PULITA | SUCCESS
+  ep 185/200 | succ=True true=True clean=True | len=148 | open_err=0.0020 | latch=+0.020 | mosso=0.184m | PULITA | SUCCESS
+  ep 186/200 | succ=True true=True clean=True | len=138 | open_err=0.0341 | latch=+0.006 | mosso=0.200m | PULITA | SUCCESS
+  ep 187/200 | succ=True true=True clean=True | len=141 | open_err=0.0026 | latch=+0.015 | mosso=0.178m | PULITA | SUCCESS
+  ep 188/200 | succ=True true=True clean=True | len=145 | open_err=0.0019 | latch=+0.011 | mosso=0.195m | PULITA | SUCCESS
+  ep 189/200 | succ=True true=True clean=True | len=132 | open_err=0.0441 | latch=+0.006 | mosso=0.179m | PULITA | SUCCESS
+  ep 190/200 | succ=True true=True clean=True | len=144 | open_err=0.0077 | latch=+0.010 | mosso=0.181m | PULITA | SUCCESS
+  ep 191/200 | succ=True true=True clean=True | len=139 | open_err=0.0166 | latch=+0.011 | mosso=0.196m | PULITA | SUCCESS
+  ep 192/200 | succ=True true=True clean=True | len=144 | open_err=0.0151 | latch=+0.003 | mosso=0.212m | PULITA | SUCCESS
+  ep 193/200 | succ=True true=True clean=True | len=135 | open_err=0.0344 | latch=+0.116 | mosso=0.128m | PULITA | SUCCESS
+  ep 194/200 | succ=True true=True clean=True | len=139 | open_err=0.0476 | latch=+0.015 | mosso=0.208m | PULITA | SUCCESS
+  ep 195/200 | succ=True true=True clean=True | len=142 | open_err=0.0191 | latch=+0.010 | mosso=0.186m | PULITA | SUCCESS
+  ep 196/200 | succ=True true=True clean=True | len=133 | open_err=0.0214 | latch=+0.009 | mosso=0.176m | PULITA | SUCCESS
+  ep 197/200 | succ=True true=True clean=True | len=135 | open_err=0.0419 | latch=+0.054 | mosso=0.200m | PULITA | SUCCESS
+  ep 198/200 | succ=True true=True clean=True | len=146 | open_err=0.0212 | latch=+0.009 | mosso=0.193m | PULITA | SUCCESS
+  ep 199/200 | succ=True true=True clean=True | len=136 | open_err=0.0050 | latch=+0.035 | mosso=0.175m | PULITA | SUCCESS
+  ep 200/200 | succ=True true=True clean=True | len=140 | open_err=0.0021 | latch=-0.003 | mosso=0.183m | PULITA | SUCCESS
+
+============================================================================
+VALUTAZIONE APERTURA — Eval (deterministica) (curriculum=1.0, 200 episodi)
+============================================================================
+  Success (permissivo, fase≥HOLD_OPEN) : 1.0000 [0.9812, 1.0000] (95% CI)
+  True success (al goal + leva neutra) : 0.8300 [0.7718, 0.8757] (95% CI)
+  Clean success (+ ritiro reale)       : 0.8300 [0.7718, 0.8757] (95% CI)
+  RIFERIMENTO BANALE (spalanca sempre) : 161/200 = 80.5% [74.5, 85.4]
+  → guadagno della policy addestrata    : +2.5 punti (sul solo criterio dell'angolo)
+  Lunghezza episodio (IQM)             : 142.9000 [141.6700, 144.2100] (95% CI)
+  Lunghezza, CVaR peggior 10%          : 286.7 step
+  open_error finale (IQM)              : 0.0278 [0.0241, 0.0315] (95% CI)
+  errore CON SEGNO (fine-goal), media   : +0.0243 rad (92% oltre il goal)
+  open_error finale, CVaR peggior 10%  : 0.0580 rad
+  open_error minimo (IQM)              : 0.0013 [0.0009, 0.0019] (95% CI)
+  Allontanamento in RETREAT (IQM)      : 0.1856 [0.1839, 0.1873] (95% CI) m
+  Braccio fermo sulla maniglia         : 0.0000 [0.0000, 0.0192] (95% CI) (sui RETREAT)
+  ------------------------------------------------------------------------
+  Tipo di terminazione                        count   95% CI
+    PULITA                              190   [91.0, 97.3]%
+    ESOGENA                               6   [ 1.4,  6.4]%
+    HARD-CAP                              0   [ 0.0,  1.9]%
+    troncata a orizzonte                  4   [ 0.8,  5.0]%
+  ------------------------------------------------------------------------
+  Modo di fallimento                          count   95% CI
+    SUCCESS                             166   [77.2, 87.6]%
+    REACH timeout                         0   [ 0.0,  1.9]%
+    PULL timeout / grasp lost             0   [ 0.0,  1.9]%
+    HOLD_OPEN regress / timeout           4   [ 0.8,  5.0]%
+    RETREAT overshoot (oltre il goal)    24   [ 8.2, 17.2]%
+    RETREAT door regress (sotto il goal)     0   [ 0.0,  1.9]%
+    RETREAT latch not neutral             6   [ 1.4,  6.4]%
+    RETREAT stuck on handle               0   [ 0.0,  1.9]%
+    RETREAT timeout                       0   [ 0.0,  1.9]%
+============================================================================
+
+[curr1_posa_variabile] Valutazione TRAIN (stocastica)…
+  ep   1/200 | succ=True true=True clean=True | len=208 | open_err=0.0383 | latch=-0.022 | mosso=0.221m | PULITA | SUCCESS
+  ep   2/200 | succ=True true=False clean=False | len=180 | open_err=0.0507 | latch=-0.008 | mosso=0.201m | PULITA | RETREAT overshoot (oltre il goal)
+  ep   3/200 | succ=True true=True clean=True | len=151 | open_err=0.0053 | latch=-0.016 | mosso=0.202m | PULITA | SUCCESS
+  ep   4/200 | succ=True true=True clean=True | len=168 | open_err=0.0439 | latch=+0.009 | mosso=0.185m | PULITA | SUCCESS
+  ep   5/200 | succ=True true=True clean=True | len=174 | open_err=0.0028 | latch=+0.010 | mosso=0.185m | PULITA | SUCCESS
+  ep   6/200 | succ=True true=True clean=True | len=155 | open_err=0.0354 | latch=+0.016 | mosso=0.208m | PULITA | SUCCESS
+  ep   7/200 | succ=True true=True clean=True | len=147 | open_err=0.0168 | latch=+0.003 | mosso=0.192m | PULITA | SUCCESS
+  ep   8/200 | succ=True true=True clean=True | len=157 | open_err=0.0063 | latch=+0.019 | mosso=0.188m | PULITA | SUCCESS
+  ep   9/200 | succ=True true=True clean=True | len=333 | open_err=0.0045 | latch=+0.074 | mosso=0.169m | PULITA | SUCCESS
+  ep  10/200 | succ=True true=True clean=True | len=170 | open_err=0.0126 | latch=-0.013 | mosso=0.226m | PULITA | SUCCESS
+  ep  11/200 | succ=True true=True clean=True | len=138 | open_err=0.0284 | latch=-0.008 | mosso=0.199m | PULITA | SUCCESS
+  ep  12/200 | succ=True true=True clean=True | len=169 | open_err=0.0111 | latch=+0.012 | mosso=0.190m | PULITA | SUCCESS
+  ep  13/200 | succ=True true=False clean=False | len=167 | open_err=0.0539 | latch=+0.032 | mosso=0.200m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  14/200 | succ=True true=True clean=True | len=145 | open_err=0.0294 | latch=+0.003 | mosso=0.192m | PULITA | SUCCESS
+  ep  15/200 | succ=True true=False clean=False | len=151 | open_err=0.0517 | latch=+0.002 | mosso=0.188m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  16/200 | succ=True true=True clean=True | len=155 | open_err=0.0187 | latch=+0.007 | mosso=0.217m | PULITA | SUCCESS
+  ep  17/200 | succ=True true=True clean=True | len=147 | open_err=0.0472 | latch=+0.005 | mosso=0.195m | PULITA | SUCCESS
+  ep  18/200 | succ=True true=True clean=True | len=381 | open_err=0.0174 | latch=+0.035 | mosso=0.175m | PULITA | SUCCESS
+  ep  19/200 | succ=True true=True clean=True | len=155 | open_err=0.0016 | latch=+0.012 | mosso=0.176m | PULITA | SUCCESS
+  ep  20/200 | succ=True true=True clean=True | len=185 | open_err=0.0144 | latch=-0.008 | mosso=0.256m | PULITA | SUCCESS
+  ep  21/200 | succ=True true=True clean=True | len=139 | open_err=0.0226 | latch=-0.005 | mosso=0.174m | PULITA | SUCCESS
+  ep  22/200 | succ=True true=False clean=False | len=200 | open_err=0.0503 | latch=+0.002 | mosso=0.211m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  23/200 | succ=True true=True clean=True | len=164 | open_err=0.0483 | latch=+0.020 | mosso=0.193m | PULITA | SUCCESS
+  ep  24/200 | succ=True true=True clean=True | len=155 | open_err=0.0067 | latch=-0.003 | mosso=0.198m | PULITA | SUCCESS
+  ep  25/200 | succ=True true=True clean=True | len=164 | open_err=0.0398 | latch=+0.002 | mosso=0.209m | PULITA | SUCCESS
+  ep  26/200 | succ=True true=True clean=True | len=203 | open_err=0.0082 | latch=+0.006 | mosso=0.173m | PULITA | SUCCESS
+  ep  27/200 | succ=True true=True clean=True | len=177 | open_err=0.0228 | latch=+0.010 | mosso=0.189m | PULITA | SUCCESS
+  ep  28/200 | succ=True true=True clean=True | len=151 | open_err=0.0271 | latch=+0.001 | mosso=0.184m | PULITA | SUCCESS
+  ep  29/200 | succ=True true=True clean=True | len=151 | open_err=0.0354 | latch=-0.007 | mosso=0.195m | PULITA | SUCCESS
+  ep  30/200 | succ=True true=True clean=True | len=152 | open_err=0.0384 | latch=+0.020 | mosso=0.181m | PULITA | SUCCESS
+  ep  31/200 | succ=True true=True clean=True | len=144 | open_err=0.0139 | latch=+0.054 | mosso=0.160m | PULITA | SUCCESS
+  ep  32/200 | succ=True true=True clean=True | len=133 | open_err=0.0132 | latch=+0.038 | mosso=0.182m | PULITA | SUCCESS
+  ep  33/200 | succ=True true=True clean=True | len=170 | open_err=0.0067 | latch=+0.019 | mosso=0.185m | PULITA | SUCCESS
+  ep  34/200 | succ=True true=True clean=True | len=170 | open_err=0.0137 | latch=-0.021 | mosso=0.214m | PULITA | SUCCESS
+  ep  35/200 | succ=True true=True clean=True | len=277 | open_err=0.0055 | latch=+0.059 | mosso=0.143m | PULITA | SUCCESS
+  ep  36/200 | succ=True true=True clean=True | len=167 | open_err=0.0443 | latch=+0.004 | mosso=0.216m | PULITA | SUCCESS
+  ep  37/200 | succ=True true=True clean=True | len=164 | open_err=0.0273 | latch=-0.021 | mosso=0.225m | PULITA | SUCCESS
+  ep  38/200 | succ=True true=True clean=True | len=163 | open_err=0.0095 | latch=+0.030 | mosso=0.183m | PULITA | SUCCESS
+  ep  39/200 | succ=True true=True clean=True | len=143 | open_err=0.0220 | latch=+0.000 | mosso=0.189m | PULITA | SUCCESS
+  ep  40/200 | succ=True true=True clean=True | len=151 | open_err=0.0181 | latch=-0.006 | mosso=0.203m | PULITA | SUCCESS
+  ep  41/200 | succ=True true=True clean=True | len=159 | open_err=0.0340 | latch=+0.019 | mosso=0.190m | PULITA | SUCCESS
+  ep  42/200 | succ=True true=True clean=True | len=160 | open_err=0.0382 | latch=-0.001 | mosso=0.192m | PULITA | SUCCESS
+  ep  43/200 | succ=True true=True clean=True | len=169 | open_err=0.0385 | latch=-0.020 | mosso=0.198m | PULITA | SUCCESS
+  ep  44/200 | succ=True true=True clean=True | len=250 | open_err=0.0305 | latch=+0.030 | mosso=0.192m | PULITA | SUCCESS
+  ep  45/200 | succ=True true=True clean=True | len=156 | open_err=0.0048 | latch=+0.002 | mosso=0.186m | PULITA | SUCCESS
+  ep  46/200 | succ=True true=False clean=False | len=142 | open_err=0.0505 | latch=+0.015 | mosso=0.189m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  47/200 | succ=True true=True clean=True | len=154 | open_err=0.0446 | latch=+0.006 | mosso=0.180m | PULITA | SUCCESS
+  ep  48/200 | succ=True true=True clean=True | len=428 | open_err=0.0298 | latch=-0.021 | mosso=0.163m | PULITA | SUCCESS
+  ep  49/200 | succ=True true=True clean=True | len=201 | open_err=0.0490 | latch=-0.001 | mosso=0.197m | PULITA | SUCCESS
+  ep  50/200 | succ=True true=True clean=True | len=145 | open_err=0.0416 | latch=-0.010 | mosso=0.209m | PULITA | SUCCESS
+  ep  51/200 | succ=True true=True clean=True | len=149 | open_err=0.0206 | latch=-0.009 | mosso=0.181m | PULITA | SUCCESS
+  ep  52/200 | succ=True true=True clean=True | len=226 | open_err=0.0123 | latch=+0.005 | mosso=0.177m | PULITA | SUCCESS
+  ep  53/200 | succ=True true=True clean=True | len=235 | open_err=0.0306 | latch=-0.005 | mosso=0.182m | PULITA | SUCCESS
+  ep  54/200 | succ=True true=True clean=True | len=149 | open_err=0.0421 | latch=-0.007 | mosso=0.191m | PULITA | SUCCESS
+  ep  55/200 | succ=True true=True clean=True | len=168 | open_err=0.0221 | latch=+0.002 | mosso=0.191m | PULITA | SUCCESS
+  ep  56/200 | succ=True true=True clean=True | len=172 | open_err=0.0458 | latch=-0.010 | mosso=0.204m | PULITA | SUCCESS
+  ep  57/200 | succ=True true=True clean=True | len=135 | open_err=0.0067 | latch=+0.009 | mosso=0.181m | PULITA | SUCCESS
+  ep  58/200 | succ=True true=True clean=True | len=135 | open_err=0.0021 | latch=+0.018 | mosso=0.190m | PULITA | SUCCESS
+  ep  59/200 | succ=True true=True clean=True | len=135 | open_err=0.0030 | latch=+0.001 | mosso=0.215m | PULITA | SUCCESS
+  ep  60/200 | succ=True true=True clean=True | len=138 | open_err=0.0117 | latch=+0.065 | mosso=0.182m | PULITA | SUCCESS
+  ep  61/200 | succ=True true=True clean=True | len=148 | open_err=0.0446 | latch=-0.014 | mosso=0.192m | PULITA | SUCCESS
+  ep  62/200 | succ=True true=True clean=True | len=170 | open_err=0.0013 | latch=-0.015 | mosso=0.185m | PULITA | SUCCESS
+  ep  63/200 | succ=True true=True clean=True | len=138 | open_err=0.0057 | latch=-0.004 | mosso=0.206m | PULITA | SUCCESS
+  ep  64/200 | succ=True true=True clean=True | len=132 | open_err=0.0237 | latch=+0.046 | mosso=0.182m | PULITA | SUCCESS
+  ep  65/200 | succ=True true=True clean=True | len=406 | open_err=0.0057 | latch=+0.004 | mosso=0.184m | PULITA | SUCCESS
+  ep  66/200 | succ=True true=True clean=True | len=154 | open_err=0.0044 | latch=-0.000 | mosso=0.196m | PULITA | SUCCESS
+  ep  67/200 | succ=True true=True clean=True | len=212 | open_err=0.0473 | latch=+0.011 | mosso=0.226m | PULITA | SUCCESS
+  ep  68/200 | succ=True true=False clean=False | len=158 | open_err=0.0503 | latch=-0.005 | mosso=0.212m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  69/200 | succ=True true=True clean=True | len=201 | open_err=0.0195 | latch=-0.022 | mosso=0.245m | PULITA | SUCCESS
+  ep  70/200 | succ=True true=True clean=True | len=145 | open_err=0.0278 | latch=+0.001 | mosso=0.193m | PULITA | SUCCESS
+  ep  71/200 | succ=True true=True clean=True | len=144 | open_err=0.0002 | latch=+0.004 | mosso=0.173m | PULITA | SUCCESS
+  ep  72/200 | succ=True true=True clean=True | len=148 | open_err=0.0008 | latch=+0.003 | mosso=0.210m | PULITA | SUCCESS
+  ep  73/200 | succ=True true=True clean=True | len=157 | open_err=0.0186 | latch=-0.003 | mosso=0.198m | PULITA | SUCCESS
+  ep  74/200 | succ=True true=False clean=False | len=174 | open_err=0.0528 | latch=+0.009 | mosso=0.199m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  75/200 | succ=True true=True clean=True | len=150 | open_err=0.0201 | latch=+0.010 | mosso=0.180m | PULITA | SUCCESS
+  ep  76/200 | succ=True true=True clean=True | len=168 | open_err=0.0478 | latch=-0.020 | mosso=0.207m | PULITA | SUCCESS
+  ep  77/200 | succ=True true=True clean=True | len=153 | open_err=0.0116 | latch=+0.029 | mosso=0.182m | PULITA | SUCCESS
+  ep  78/200 | succ=True true=True clean=True | len=272 | open_err=0.0404 | latch=+0.016 | mosso=0.186m | PULITA | SUCCESS
+  ep  79/200 | succ=True true=True clean=True | len=174 | open_err=0.0493 | latch=+0.011 | mosso=0.183m | PULITA | SUCCESS
+  ep  80/200 | succ=True true=True clean=True | len=179 | open_err=0.0366 | latch=-0.005 | mosso=0.199m | PULITA | SUCCESS
+  ep  81/200 | succ=True true=True clean=True | len=214 | open_err=0.0107 | latch=+0.011 | mosso=0.210m | PULITA | SUCCESS
+  ep  82/200 | succ=True true=True clean=True | len=155 | open_err=0.0292 | latch=+0.023 | mosso=0.191m | PULITA | SUCCESS
+  ep  83/200 | succ=True true=True clean=True | len=156 | open_err=0.0118 | latch=+0.043 | mosso=0.175m | PULITA | SUCCESS
+  ep  84/200 | succ=True true=True clean=True | len=146 | open_err=0.0017 | latch=-0.000 | mosso=0.163m | PULITA | SUCCESS
+  ep  85/200 | succ=True true=True clean=True | len=148 | open_err=0.0144 | latch=+0.028 | mosso=0.173m | PULITA | SUCCESS
+  ep  86/200 | succ=True true=True clean=True | len=177 | open_err=0.0031 | latch=+0.011 | mosso=0.184m | PULITA | SUCCESS
+  ep  87/200 | succ=True true=True clean=True | len=152 | open_err=0.0466 | latch=-0.118 | mosso=0.151m | PULITA | SUCCESS
+  ep  88/200 | succ=True true=True clean=True | len=153 | open_err=0.0023 | latch=-0.010 | mosso=0.206m | PULITA | SUCCESS
+  ep  89/200 | succ=True true=False clean=False | len=193 | open_err=0.0572 | latch=+0.009 | mosso=0.192m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  90/200 | succ=True true=True clean=True | len=175 | open_err=0.0201 | latch=-0.014 | mosso=0.189m | PULITA | SUCCESS
+  ep  91/200 | succ=True true=True clean=True | len=161 | open_err=0.0009 | latch=+0.039 | mosso=0.179m | PULITA | SUCCESS
+  ep  92/200 | succ=True true=True clean=True | len=134 | open_err=0.0298 | latch=-0.000 | mosso=0.190m | PULITA | SUCCESS
+  ep  93/200 | succ=True true=True clean=True | len=202 | open_err=0.0399 | latch=+0.003 | mosso=0.197m | PULITA | SUCCESS
+  ep  94/200 | succ=True true=True clean=True | len=153 | open_err=0.0351 | latch=-0.007 | mosso=0.196m | PULITA | SUCCESS
+  ep  95/200 | succ=True true=False clean=False | len=144 | open_err=0.0571 | latch=-0.006 | mosso=0.230m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  96/200 | succ=True true=False clean=False | len=148 | open_err=0.0568 | latch=+0.020 | mosso=0.191m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  97/200 | succ=True true=False clean=False | len=169 | open_err=0.0515 | latch=-0.007 | mosso=0.191m | PULITA | RETREAT overshoot (oltre il goal)
+  ep  98/200 | succ=True true=True clean=True | len=160 | open_err=0.0445 | latch=+0.018 | mosso=0.176m | PULITA | SUCCESS
+  ep  99/200 | succ=True true=True clean=True | len=160 | open_err=0.0158 | latch=+0.040 | mosso=0.186m | PULITA | SUCCESS
+  ep 100/200 | succ=True true=False clean=False | len=157 | open_err=0.0503 | latch=+0.024 | mosso=0.194m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 101/200 | succ=True true=True clean=True | len=151 | open_err=0.0357 | latch=+0.003 | mosso=0.198m | PULITA | SUCCESS
+  ep 102/200 | succ=True true=True clean=True | len=153 | open_err=0.0039 | latch=+0.014 | mosso=0.180m | PULITA | SUCCESS
+  ep 103/200 | succ=True true=True clean=True | len=177 | open_err=0.0273 | latch=-0.016 | mosso=0.205m | PULITA | SUCCESS
+  ep 104/200 | succ=True true=True clean=True | len=208 | open_err=0.0146 | latch=+0.002 | mosso=0.217m | PULITA | SUCCESS
+  ep 105/200 | succ=True true=True clean=True | len=168 | open_err=0.0317 | latch=-0.020 | mosso=0.216m | PULITA | SUCCESS
+  ep 106/200 | succ=True true=False clean=False | len=600 | open_err=0.3431 | latch=+0.030 | mosso=0.000m | troncata a orizzonte | HOLD_OPEN regress / timeout
+  ep 107/200 | succ=True true=True clean=True | len=208 | open_err=0.0442 | latch=+0.000 | mosso=0.200m | PULITA | SUCCESS
+  ep 108/200 | succ=True true=True clean=True | len=155 | open_err=0.0152 | latch=-0.014 | mosso=0.209m | PULITA | SUCCESS
+  ep 109/200 | succ=True true=True clean=True | len=239 | open_err=0.0028 | latch=+0.003 | mosso=0.205m | PULITA | SUCCESS
+  ep 110/200 | succ=True true=True clean=True | len=143 | open_err=0.0318 | latch=+0.076 | mosso=0.167m | PULITA | SUCCESS
+  ep 111/200 | succ=True true=True clean=True | len=149 | open_err=0.0103 | latch=+0.000 | mosso=0.196m | PULITA | SUCCESS
+  ep 112/200 | succ=True true=True clean=True | len=150 | open_err=0.0289 | latch=-0.004 | mosso=0.184m | PULITA | SUCCESS
+  ep 113/200 | succ=True true=True clean=True | len=156 | open_err=0.0059 | latch=-0.002 | mosso=0.198m | PULITA | SUCCESS
+  ep 114/200 | succ=True true=True clean=True | len=155 | open_err=0.0238 | latch=+0.025 | mosso=0.190m | PULITA | SUCCESS
+  ep 115/200 | succ=True true=True clean=True | len=353 | open_err=0.0038 | latch=+0.073 | mosso=0.173m | PULITA | SUCCESS
+  ep 116/200 | succ=True true=True clean=True | len=304 | open_err=0.0154 | latch=+0.016 | mosso=0.194m | PULITA | SUCCESS
+  ep 117/200 | succ=True true=True clean=True | len=155 | open_err=0.0469 | latch=-0.016 | mosso=0.202m | PULITA | SUCCESS
+  ep 118/200 | succ=True true=True clean=True | len=144 | open_err=0.0027 | latch=+0.023 | mosso=0.175m | PULITA | SUCCESS
+  ep 119/200 | succ=True true=True clean=True | len=154 | open_err=0.0365 | latch=+0.019 | mosso=0.203m | PULITA | SUCCESS
+  ep 120/200 | succ=True true=True clean=True | len=149 | open_err=0.0387 | latch=+0.004 | mosso=0.213m | PULITA | SUCCESS
+  ep 121/200 | succ=True true=True clean=True | len=149 | open_err=0.0009 | latch=-0.010 | mosso=0.198m | PULITA | SUCCESS
+  ep 122/200 | succ=True true=True clean=True | len=178 | open_err=0.0282 | latch=+0.015 | mosso=0.202m | PULITA | SUCCESS
+  ep 123/200 | succ=True true=True clean=True | len=140 | open_err=0.0122 | latch=+0.004 | mosso=0.195m | PULITA | SUCCESS
+  ep 124/200 | succ=True true=True clean=True | len=177 | open_err=0.0289 | latch=-0.026 | mosso=0.198m | PULITA | SUCCESS
+  ep 125/200 | succ=True true=True clean=True | len=143 | open_err=0.0328 | latch=-0.008 | mosso=0.221m | PULITA | SUCCESS
+  ep 126/200 | succ=True true=True clean=True | len=143 | open_err=0.0245 | latch=-0.009 | mosso=0.191m | PULITA | SUCCESS
+  ep 127/200 | succ=True true=True clean=True | len=182 | open_err=0.0067 | latch=+0.034 | mosso=0.185m | PULITA | SUCCESS
+  ep 128/200 | succ=True true=True clean=True | len=161 | open_err=0.0472 | latch=+0.010 | mosso=0.215m | PULITA | SUCCESS
+  ep 129/200 | succ=True true=True clean=True | len=231 | open_err=0.0428 | latch=-0.009 | mosso=0.196m | PULITA | SUCCESS
+  ep 130/200 | succ=True true=True clean=True | len=142 | open_err=0.0386 | latch=+0.024 | mosso=0.197m | PULITA | SUCCESS
+  ep 131/200 | succ=True true=True clean=True | len=148 | open_err=0.0001 | latch=+0.014 | mosso=0.195m | PULITA | SUCCESS
+  ep 132/200 | succ=True true=True clean=True | len=178 | open_err=0.0183 | latch=+0.002 | mosso=0.209m | PULITA | SUCCESS
+  ep 133/200 | succ=True true=True clean=True | len=150 | open_err=0.0226 | latch=+0.007 | mosso=0.189m | PULITA | SUCCESS
+  ep 134/200 | succ=True true=False clean=False | len=179 | open_err=0.1527 | latch=-0.023 | mosso=0.194m | PULITA | RETREAT door regress (sotto il goal)
+  ep 135/200 | succ=True true=True clean=True | len=157 | open_err=0.0023 | latch=-0.007 | mosso=0.201m | PULITA | SUCCESS
+  ep 136/200 | succ=True true=True clean=True | len=520 | open_err=0.0129 | latch=+0.013 | mosso=0.199m | PULITA | SUCCESS
+  ep 137/200 | succ=True true=True clean=True | len=136 | open_err=0.0028 | latch=+0.002 | mosso=0.191m | PULITA | SUCCESS
+  ep 138/200 | succ=True true=True clean=True | len=260 | open_err=0.0008 | latch=+0.006 | mosso=0.183m | PULITA | SUCCESS
+  ep 139/200 | succ=True true=True clean=True | len=163 | open_err=0.0242 | latch=+0.007 | mosso=0.200m | PULITA | SUCCESS
+  ep 140/200 | succ=True true=True clean=True | len=172 | open_err=0.0065 | latch=-0.020 | mosso=0.200m | PULITA | SUCCESS
+  ep 141/200 | succ=True true=True clean=True | len=159 | open_err=0.0295 | latch=+0.004 | mosso=0.204m | PULITA | SUCCESS
+  ep 142/200 | succ=True true=True clean=True | len=166 | open_err=0.0267 | latch=+0.071 | mosso=0.184m | PULITA | SUCCESS
+  ep 143/200 | succ=True true=True clean=True | len=150 | open_err=0.0368 | latch=-0.005 | mosso=0.203m | PULITA | SUCCESS
+  ep 144/200 | succ=True true=True clean=True | len=147 | open_err=0.0261 | latch=-0.004 | mosso=0.184m | PULITA | SUCCESS
+  ep 145/200 | succ=True true=True clean=True | len=184 | open_err=0.0154 | latch=+0.024 | mosso=0.200m | PULITA | SUCCESS
+  ep 146/200 | succ=True true=True clean=True | len=182 | open_err=0.0396 | latch=+0.001 | mosso=0.210m | PULITA | SUCCESS
+  ep 147/200 | succ=True true=True clean=True | len=129 | open_err=0.0234 | latch=+0.003 | mosso=0.192m | PULITA | SUCCESS
+  ep 148/200 | succ=True true=True clean=True | len=143 | open_err=0.0465 | latch=+0.006 | mosso=0.177m | PULITA | SUCCESS
+  ep 149/200 | succ=True true=False clean=False | len=176 | open_err=0.0396 | latch=-0.245 | mosso=0.155m | ESOGENA | RETREAT latch not neutral
+  ep 150/200 | succ=True true=True clean=True | len=160 | open_err=0.0498 | latch=+0.000 | mosso=0.193m | PULITA | SUCCESS
+  ep 151/200 | succ=True true=True clean=True | len=172 | open_err=0.0341 | latch=-0.007 | mosso=0.187m | PULITA | SUCCESS
+  ep 152/200 | succ=True true=True clean=True | len=149 | open_err=0.0245 | latch=+0.017 | mosso=0.200m | PULITA | SUCCESS
+  ep 153/200 | succ=True true=True clean=True | len=177 | open_err=0.0021 | latch=-0.021 | mosso=0.214m | PULITA | SUCCESS
+  ep 154/200 | succ=True true=True clean=True | len=158 | open_err=0.0274 | latch=+0.029 | mosso=0.187m | PULITA | SUCCESS
+  ep 155/200 | succ=True true=True clean=True | len=150 | open_err=0.0063 | latch=+0.004 | mosso=0.179m | PULITA | SUCCESS
+  ep 156/200 | succ=True true=True clean=True | len=173 | open_err=0.0417 | latch=+0.023 | mosso=0.191m | PULITA | SUCCESS
+  ep 157/200 | succ=True true=True clean=True | len=144 | open_err=0.0269 | latch=+0.013 | mosso=0.188m | PULITA | SUCCESS
+  ep 158/200 | succ=True true=True clean=True | len=151 | open_err=0.0482 | latch=+0.040 | mosso=0.191m | PULITA | SUCCESS
+  ep 159/200 | succ=True true=True clean=True | len=150 | open_err=0.0432 | latch=+0.016 | mosso=0.193m | PULITA | SUCCESS
+  ep 160/200 | succ=True true=False clean=False | len=218 | open_err=0.0086 | latch=-0.412 | mosso=0.200m | ESOGENA | RETREAT latch not neutral
+  ep 161/200 | succ=True true=True clean=True | len=167 | open_err=0.0124 | latch=+0.017 | mosso=0.180m | PULITA | SUCCESS
+  ep 162/200 | succ=True true=False clean=False | len=145 | open_err=0.0550 | latch=+0.014 | mosso=0.193m | PULITA | RETREAT overshoot (oltre il goal)
+  ep 163/200 | succ=True true=True clean=True | len=192 | open_err=0.0431 | latch=-0.009 | mosso=0.187m | PULITA | SUCCESS
+  ep 164/200 | succ=True true=False clean=False | len=178 | open_err=0.0199 | latch=-0.236 | mosso=0.195m | ESOGENA | RETREAT latch not neutral
+  ep 165/200 | succ=True true=True clean=True | len=150 | open_err=0.0480 | latch=-0.013 | mosso=0.183m | PULITA | SUCCESS
+  ep 166/200 | succ=True true=True clean=False | len=600 | open_err=0.0410 | latch=+0.028 | mosso=0.000m | troncata a orizzonte | HOLD_OPEN regress / timeout
+  ep 167/200 | succ=True true=True clean=True | len=223 | open_err=0.0178 | latch=+0.001 | mosso=0.214m | PULITA | SUCCESS
+  ep 168/200 | succ=True true=True clean=True | len=139 | open_err=0.0194 | latch=+0.037 | mosso=0.195m | PULITA | SUCCESS
+  ep 169/200 | succ=True true=True clean=True | len=147 | open_err=0.0490 | latch=+0.006 | mosso=0.178m | PULITA | SUCCESS
+  ep 170/200 | succ=True true=True clean=True | len=164 | open_err=0.0349 | latch=+0.014 | mosso=0.188m | PULITA | SUCCESS
+  ep 171/200 | succ=True true=True clean=True | len=144 | open_err=0.0202 | latch=+0.004 | mosso=0.191m | PULITA | SUCCESS
+  ep 172/200 | succ=True true=True clean=True | len=161 | open_err=0.0088 | latch=+0.054 | mosso=0.161m | PULITA | SUCCESS
+  ep 173/200 | succ=True true=True clean=True | len=169 | open_err=0.0027 | latch=+0.008 | mosso=0.194m | PULITA | SUCCESS
+  ep 174/200 | succ=True true=True clean=True | len=174 | open_err=0.0059 | latch=+0.003 | mosso=0.191m | PULITA | SUCCESS
+  ep 175/200 | succ=True true=True clean=True | len=229 | open_err=0.0188 | latch=+0.061 | mosso=0.187m | PULITA | SUCCESS
+  ep 176/200 | succ=True true=True clean=True | len=173 | open_err=0.0030 | latch=+0.005 | mosso=0.193m | PULITA | SUCCESS
+  ep 177/200 | succ=True true=True clean=True | len=157 | open_err=0.0118 | latch=+0.007 | mosso=0.209m | PULITA | SUCCESS
+  ep 178/200 | succ=True true=True clean=True | len=149 | open_err=0.0499 | latch=-0.007 | mosso=0.190m | PULITA | SUCCESS
+  ep 179/200 | succ=True true=True clean=True | len=156 | open_err=0.0488 | latch=-0.008 | mosso=0.211m | PULITA | SUCCESS
+  ep 180/200 | succ=True true=True clean=True | len=150 | open_err=0.0318 | latch=+0.007 | mosso=0.191m | PULITA | SUCCESS
+  ep 181/200 | succ=True true=True clean=True | len=208 | open_err=0.0108 | latch=+0.012 | mosso=0.181m | PULITA | SUCCESS
+  ep 182/200 | succ=True true=True clean=True | len=151 | open_err=0.0496 | latch=+0.018 | mosso=0.187m | PULITA | SUCCESS
+  ep 183/200 | succ=True true=True clean=True | len=153 | open_err=0.0043 | latch=+0.013 | mosso=0.191m | PULITA | SUCCESS
+  ep 184/200 | succ=True true=True clean=True | len=140 | open_err=0.0142 | latch=+0.041 | mosso=0.186m | PULITA | SUCCESS
+  ep 185/200 | succ=True true=True clean=True | len=225 | open_err=0.0009 | latch=-0.006 | mosso=0.189m | PULITA | SUCCESS
+  ep 186/200 | succ=True true=True clean=True | len=385 | open_err=0.0407 | latch=+0.010 | mosso=0.196m | PULITA | SUCCESS
+  ep 187/200 | succ=True true=True clean=True | len=149 | open_err=0.0009 | latch=-0.005 | mosso=0.181m | PULITA | SUCCESS
+  ep 188/200 | succ=True true=True clean=True | len=152 | open_err=0.0002 | latch=-0.006 | mosso=0.197m | PULITA | SUCCESS
+  ep 189/200 | succ=True true=True clean=True | len=143 | open_err=0.0434 | latch=-0.007 | mosso=0.183m | PULITA | SUCCESS
+  ep 190/200 | succ=True true=True clean=True | len=143 | open_err=0.0054 | latch=+0.020 | mosso=0.172m | PULITA | SUCCESS
+  ep 191/200 | succ=True true=True clean=True | len=140 | open_err=0.0163 | latch=+0.007 | mosso=0.212m | PULITA | SUCCESS
+  ep 192/200 | succ=True true=True clean=True | len=149 | open_err=0.0158 | latch=+0.002 | mosso=0.201m | PULITA | SUCCESS
+  ep 193/200 | succ=True true=True clean=True | len=141 | open_err=0.0349 | latch=+0.041 | mosso=0.139m | PULITA | SUCCESS
+  ep 194/200 | succ=True true=True clean=True | len=149 | open_err=0.0437 | latch=-0.003 | mosso=0.190m | PULITA | SUCCESS
+  ep 195/200 | succ=True true=True clean=True | len=159 | open_err=0.0104 | latch=+0.077 | mosso=0.158m | PULITA | SUCCESS
+  ep 196/200 | succ=True true=True clean=True | len=155 | open_err=0.0225 | latch=+0.025 | mosso=0.181m | PULITA | SUCCESS
+  ep 197/200 | succ=True true=True clean=True | len=148 | open_err=0.0410 | latch=+0.022 | mosso=0.178m | PULITA | SUCCESS
+  ep 198/200 | succ=True true=True clean=True | len=162 | open_err=0.0027 | latch=-0.023 | mosso=0.201m | PULITA | SUCCESS
+  ep 199/200 | succ=True true=True clean=True | len=255 | open_err=0.0026 | latch=+0.031 | mosso=0.178m | PULITA | SUCCESS
+  ep 200/200 | succ=True true=True clean=True | len=196 | open_err=0.0074 | latch=+0.017 | mosso=0.186m | PULITA | SUCCESS
+
+============================================================================
+VALUTAZIONE APERTURA — Train (stocastica) (curriculum=1.0, 200 episodi)
+============================================================================
+  Success (permissivo, fase≥HOLD_OPEN) : 1.0000 [0.9812, 1.0000] (95% CI)
+  True success (al goal + leva neutra) : 0.9100 [0.8622, 0.9423] (95% CI)
+  Clean success (+ ritiro reale)       : 0.9050 [0.8564, 0.9383] (95% CI)
+  RIFERIMENTO BANALE (spalanca sempre) : 161/200 = 80.5% [74.5, 85.4]
+  → guadagno della policy addestrata    : +10.5 punti (sul solo criterio dell'angolo)
+  Lunghezza episodio (IQM)             : 159.5600 [156.5500, 162.9600] (95% CI)
+  Lunghezza, CVaR peggior 10%          : 339.2 step
+  open_error finale (IQM)              : 0.0241 [0.0206, 0.0276] (95% CI)
+  errore CON SEGNO (fine-goal), media   : +0.0198 rad (86% oltre il goal)
+  open_error finale, CVaR peggior 10%  : 0.0716 rad
+  open_error minimo (IQM)              : 0.0005 [0.0004, 0.0006] (95% CI)
+  Allontanamento in RETREAT (IQM)      : 0.1918 [0.1899, 0.1936] (95% CI) m
+  Braccio fermo sulla maniglia         : 0.0000 [0.0000, 0.0190] (95% CI) (sui RETREAT)
+  ------------------------------------------------------------------------
+  Tipo di terminazione                        count   95% CI
+    PULITA                              195   [94.3, 98.9]%
+    ESOGENA                               3   [ 0.5,  4.3]%
+    HARD-CAP                              0   [ 0.0,  1.9]%
+    troncata a orizzonte                  2   [ 0.3,  3.6]%
+  ------------------------------------------------------------------------
+  Modo di fallimento                          count   95% CI
+    SUCCESS                             181   [85.6, 93.8]%
+    REACH timeout                         0   [ 0.0,  1.9]%
+    PULL timeout / grasp lost             0   [ 0.0,  1.9]%
+    HOLD_OPEN regress / timeout           2   [ 0.3,  3.6]%
+    RETREAT overshoot (oltre il goal)    13   [ 3.8, 10.8]%
+    RETREAT door regress (sotto il goal)     1   [ 0.1,  2.8]%
+    RETREAT latch not neutral             3   [ 0.5,  4.3]%
+    RETREAT stuck on handle               0   [ 0.0,  1.9]%
+    RETREAT timeout                       0   [ 0.0,  1.9]%
+============================================================================
+
+Genero i grafici…
+Fatto. Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/evaluate
+[OK] evaluate_policy in 136.2s
+
+##############################################################################
+# SUITE: phase_diagnostics
+##############################################################################
+  ep   1 | true=False | open_err@transiz=0.0536 latch@transiz=+1.060 | mosso=0.181m | HOLD_n=30 RET_n=66 | PULITA
+  ep   2 | true=True | open_err@transiz=0.0384 latch@transiz=+1.029 | mosso=0.191m | HOLD_n=30 RET_n=70 | PULITA
+  ep   3 | true=True | open_err@transiz=0.0025 latch@transiz=+1.369 | mosso=0.178m | HOLD_n=36 RET_n=75 | PULITA
+  ep   4 | true=True | open_err@transiz=0.0238 latch@transiz=+1.347 | mosso=0.171m | HOLD_n=33 RET_n=72 | PULITA
+  ep   5 | true=True | open_err@transiz=0.0431 latch@transiz=+1.045 | mosso=0.196m | HOLD_n=35 RET_n=61 | PULITA
+  ep   6 | true=True | open_err@transiz=0.0028 latch@transiz=+1.262 | mosso=0.194m | HOLD_n=35 RET_n=72 | PULITA
+  ep   7 | true=True | open_err@transiz=0.0163 latch@transiz=+1.099 | mosso=0.203m | HOLD_n=35 RET_n=79 | PULITA
+  ep   8 | true=True | open_err@transiz=0.0059 latch@transiz=+1.165 | mosso=0.200m | HOLD_n=30 RET_n=80 | PULITA
+  ep   9 | true=True | open_err@transiz=0.0181 latch@transiz=+0.956 | mosso=0.177m | HOLD_n=39 RET_n=68 | PULITA
+  ep  10 | true=True | open_err@transiz=0.0054 latch@transiz=+1.199 | mosso=0.183m | HOLD_n=39 RET_n=76 | PULITA
+  ep  11 | true=True | open_err@transiz=0.0008 latch@transiz=+1.234 | mosso=0.175m | HOLD_n=31 RET_n=72 | PULITA
+  ep  12 | true=True | open_err@transiz=0.0096 latch@transiz=+1.205 | mosso=0.182m | HOLD_n=30 RET_n=74 | PULITA
+  ep  13 | true=True | open_err@transiz=0.0414 latch@transiz=+1.115 | mosso=0.195m | HOLD_n=40 RET_n=70 | PULITA
+  ep  14 | true=True | open_err@transiz=0.0136 latch@transiz=+1.040 | mosso=0.162m | HOLD_n=30 RET_n=61 | PULITA
+  ep  15 | true=False | open_err@transiz=0.0452 latch@transiz=+0.980 | mosso=0.225m | HOLD_n=30 RET_n=83 | PULITA
+  ep  16 | true=True | open_err@transiz=0.0417 latch@transiz=+1.148 | mosso=0.200m | HOLD_n=40 RET_n=74 | PULITA
+  ep  17 | true=True | open_err@transiz=0.0348 latch@transiz=+0.856 | mosso=0.193m | HOLD_n=44 RET_n=62 | PULITA
+  ep  18 | true=False | open_err@transiz=0.0366 latch@transiz=+0.924 | mosso=0.151m | HOLD_n=86 RET_n=89 | ESOGENA
+  ep  19 | true=True | open_err@transiz=0.0039 latch@transiz=+1.094 | mosso=0.195m | HOLD_n=44 RET_n=75 | PULITA
+  ep  20 | true=True | open_err@transiz=0.0414 latch@transiz=+0.997 | mosso=0.185m | HOLD_n=33 RET_n=60 | PULITA
+  ep  21 | true=True | open_err@transiz=0.0287 latch@transiz=+1.408 | mosso=0.186m | HOLD_n=30 RET_n=77 | PULITA
+  ep  22 | true=True | open_err@transiz=0.0115 latch@transiz=+1.078 | mosso=0.205m | HOLD_n=34 RET_n=77 | PULITA
+  ep  23 | true=True | open_err@transiz=0.0099 latch@transiz=+1.055 | mosso=0.194m | HOLD_n=30 RET_n=76 | PULITA
+  ep  24 | true=False | open_err@transiz=0.0053 latch@transiz=+1.166 | mosso=0.216m | HOLD_n=30 RET_n=81 | PULITA
+  ep  25 | true=True | open_err@transiz=0.0326 latch@transiz=+1.343 | mosso=0.197m | HOLD_n=33 RET_n=81 | PULITA
+  ep  26 | true=True | open_err@transiz=0.0121 latch@transiz=+0.936 | mosso=0.137m | HOLD_n=40 RET_n=63 | PULITA
+  ep  27 | true=True | open_err@transiz=0.0060 latch@transiz=+1.014 | mosso=0.162m | HOLD_n=44 RET_n=66 | PULITA
+  ep  28 | true=False | open_err@transiz=0.0469 latch@transiz=+1.331 | mosso=0.199m | HOLD_n=32 RET_n=76 | PULITA
+  ep  29 | true=True | open_err@transiz=0.0186 latch@transiz=+0.944 | mosso=0.180m | HOLD_n=36 RET_n=73 | PULITA
+  ep  30 | true=True | open_err@transiz=0.0503 latch@transiz=+1.284 | mosso=0.186m | HOLD_n=30 RET_n=74 | PULITA
+  ep  31 | true=True | open_err@transiz=0.0057 latch@transiz=+1.219 | mosso=0.197m | HOLD_n=30 RET_n=75 | PULITA
+  ep  32 | true=False | open_err@transiz=0.0031 latch@transiz=+0.955 | mosso=0.166m | HOLD_n=34 RET_n=87 | ESOGENA
+  ep  33 | true=True | open_err@transiz=0.0031 latch@transiz=+1.027 | mosso=0.168m | HOLD_n=38 RET_n=61 | PULITA
+  ep  34 | true=True | open_err@transiz=0.0025 latch@transiz=+0.904 | mosso=0.188m | HOLD_n=43 RET_n=66 | PULITA
+  ep  35 | true=True | open_err@transiz=0.0112 latch@transiz=+1.158 | mosso=0.189m | HOLD_n=30 RET_n=72 | PULITA
+  ep  36 | true=True | open_err@transiz=0.0131 latch@transiz=+1.141 | mosso=0.183m | HOLD_n=43 RET_n=72 | PULITA
+  ep  37 | true=True | open_err@transiz=0.0039 latch@transiz=+0.770 | mosso=0.112m | HOLD_n=43 RET_n=62 | PULITA
+  ep  38 | true=True | open_err@transiz=0.0334 latch@transiz=+1.206 | mosso=0.190m | HOLD_n=30 RET_n=73 | PULITA
+  ep  39 | true=True | open_err@transiz=0.0147 latch@transiz=+1.015 | mosso=0.187m | HOLD_n=42 RET_n=64 | PULITA
+  ep  40 | true=True | open_err@transiz=0.0056 latch@transiz=+1.049 | mosso=0.177m | HOLD_n=30 RET_n=67 | PULITA
+  ep  41 | true=True | open_err@transiz=0.0185 latch@transiz=+1.007 | mosso=0.173m | HOLD_n=34 RET_n=63 | PULITA
+  ep  42 | true=True | open_err@transiz=0.0399 latch@transiz=+1.030 | mosso=0.193m | HOLD_n=30 RET_n=67 | PULITA
+  ep  43 | true=True | open_err@transiz=0.0031 latch@transiz=+1.139 | mosso=0.190m | HOLD_n=31 RET_n=71 | PULITA
+  ep  44 | true=True | open_err@transiz=0.0195 latch@transiz=+0.904 | mosso=0.181m | HOLD_n=33 RET_n=62 | PULITA
+  ep  45 | true=True | open_err@transiz=0.0106 latch@transiz=+1.155 | mosso=0.194m | HOLD_n=30 RET_n=76 | PULITA
+  ep  46 | true=True | open_err@transiz=0.0433 latch@transiz=+1.097 | mosso=0.203m | HOLD_n=91 RET_n=76 | PULITA
+  ep  47 | true=True | open_err@transiz=0.0338 latch@transiz=+1.164 | mosso=0.180m | HOLD_n=30 RET_n=64 | PULITA
+  ep  48 | true=True | open_err@transiz=0.0285 latch@transiz=+1.148 | mosso=0.182m | HOLD_n=30 RET_n=71 | PULITA
+  ep  49 | true=False | open_err@transiz=0.0122 latch@transiz=+0.709 | mosso=0.061m | HOLD_n=42 RET_n=80 | ESOGENA
+  ep  50 | true=True | open_err@transiz=0.0043 latch@transiz=+1.151 | mosso=0.177m | HOLD_n=37 RET_n=63 | PULITA
+  ep  51 | true=True | open_err@transiz=0.0116 latch@transiz=+1.257 | mosso=0.182m | HOLD_n=30 RET_n=72 | PULITA
+  ep  52 | true=True | open_err@transiz=0.0249 latch@transiz=+1.048 | mosso=0.175m | HOLD_n=30 RET_n=65 | PULITA
+  ep  53 | true=True | open_err@transiz=0.0072 latch@transiz=+1.379 | mosso=0.191m | HOLD_n=30 RET_n=80 | PULITA
+  ep  54 | true=True | open_err@transiz=0.0353 latch@transiz=+1.306 | mosso=0.197m | HOLD_n=31 RET_n=75 | PULITA
+  ep  55 | true=True | open_err@transiz=0.0245 latch@transiz=+0.940 | mosso=0.181m | HOLD_n=30 RET_n=63 | PULITA
+  ep  56 | true=False | open_err@transiz=0.0037 latch@transiz=+0.903 | mosso=0.157m | HOLD_n=30 RET_n=85 | ESOGENA
+  ep  57 | true=True | open_err@transiz=0.0535 latch@transiz=+1.118 | mosso=0.181m | HOLD_n=38 RET_n=59 | PULITA
+  ep  58 | true=True | open_err@transiz=0.0272 latch@transiz=+1.199 | mosso=0.184m | HOLD_n=30 RET_n=66 | PULITA
+  ep  59 | true=True | open_err@transiz=0.0430 latch@transiz=+1.121 | mosso=0.178m | HOLD_n=30 RET_n=64 | PULITA
+  ep  60 | true=True | open_err@transiz=0.0123 latch@transiz=+1.083 | mosso=0.209m | HOLD_n=30 RET_n=72 | PULITA
+  ep  61 | true=True | open_err@transiz=0.0422 latch@transiz=+0.923 | mosso=0.188m | HOLD_n=30 RET_n=67 | PULITA
+  ep  62 | true=False | open_err@transiz=0.0033 latch@transiz=+0.936 | mosso=0.157m | HOLD_n=44 RET_n=83 | ESOGENA
+  ep  63 | true=True | open_err@transiz=0.0378 latch@transiz=+1.283 | mosso=0.175m | HOLD_n=41 RET_n=70 | PULITA
+  ep  64 | true=True | open_err@transiz=0.0214 latch@transiz=+1.357 | mosso=0.175m | HOLD_n=30 RET_n=74 | PULITA
+  ep  65 | true=True | open_err@transiz=0.0127 latch@transiz=+1.307 | mosso=0.172m | HOLD_n=35 RET_n=71 | PULITA
+  ep  66 | true=True | open_err@transiz=0.0254 latch@transiz=+1.193 | mosso=0.181m | HOLD_n=35 RET_n=69 | PULITA
+  ep  67 | true=True | open_err@transiz=0.0255 latch@transiz=+1.005 | mosso=0.178m | HOLD_n=30 RET_n=64 | PULITA
+  ep  68 | true=True | open_err@transiz=0.0420 latch@transiz=+1.240 | mosso=0.180m | HOLD_n=30 RET_n=68 | PULITA
+  ep  69 | true=False | open_err@transiz=0.0393 latch@transiz=+1.292 | mosso=0.208m | HOLD_n=30 RET_n=85 | PULITA
+  ep  70 | true=False | open_err@transiz=0.0156 latch@transiz=+1.071 | mosso=0.198m | HOLD_n=32 RET_n=76 | PULITA
+  ep  71 | true=True | open_err@transiz=0.0340 latch@transiz=+0.937 | mosso=0.126m | HOLD_n=38 RET_n=77 | PULITA
+  ep  72 | true=False | open_err@transiz=n/a latch@transiz=n/a | mosso=0.000m | HOLD_n=567 RET_n=0 | troncata a orizzonte
+  ep  73 | true=True | open_err@transiz=0.0198 latch@transiz=+1.116 | mosso=0.171m | HOLD_n=34 RET_n=68 | PULITA
+  ep  74 | true=True | open_err@transiz=0.0168 latch@transiz=+1.328 | mosso=0.190m | HOLD_n=34 RET_n=76 | PULITA
+  ep  75 | true=True | open_err@transiz=0.0346 latch@transiz=+0.949 | mosso=0.214m | HOLD_n=31 RET_n=75 | PULITA
+  ep  76 | true=True | open_err@transiz=0.0021 latch@transiz=+1.164 | mosso=0.178m | HOLD_n=32 RET_n=68 | PULITA
+  ep  77 | true=True | open_err@transiz=0.0141 latch@transiz=+1.288 | mosso=0.174m | HOLD_n=37 RET_n=74 | PULITA
+  ep  78 | true=True | open_err@transiz=0.0010 latch@transiz=+1.128 | mosso=0.188m | HOLD_n=39 RET_n=69 | PULITA
+  ep  79 | true=True | open_err@transiz=0.0077 latch@transiz=+1.133 | mosso=0.170m | HOLD_n=36 RET_n=63 | PULITA
+  ep  80 | true=True | open_err@transiz=0.0493 latch@transiz=+1.131 | mosso=0.188m | HOLD_n=43 RET_n=60 | PULITA
+  ep  81 | true=True | open_err@transiz=0.0239 latch@transiz=+1.280 | mosso=0.179m | HOLD_n=30 RET_n=72 | PULITA
+  ep  82 | true=True | open_err@transiz=0.0160 latch@transiz=+1.308 | mosso=0.190m | HOLD_n=30 RET_n=71 | PULITA
+  ep  83 | true=True | open_err@transiz=0.0257 latch@transiz=+1.100 | mosso=0.189m | HOLD_n=30 RET_n=71 | PULITA
+  ep  84 | true=True | open_err@transiz=0.0141 latch@transiz=+1.194 | mosso=0.186m | HOLD_n=30 RET_n=70 | PULITA
+  ep  85 | true=True | open_err@transiz=0.0103 latch@transiz=+0.985 | mosso=0.209m | HOLD_n=36 RET_n=79 | PULITA
+  ep  86 | true=True | open_err@transiz=0.0316 latch@transiz=+1.017 | mosso=0.182m | HOLD_n=30 RET_n=65 | PULITA
+  ep  87 | true=True | open_err@transiz=0.0399 latch@transiz=+1.249 | mosso=0.183m | HOLD_n=30 RET_n=72 | PULITA
+  ep  88 | true=True | open_err@transiz=0.0126 latch@transiz=+1.252 | mosso=0.200m | HOLD_n=42 RET_n=80 | PULITA
+  ep  89 | true=True | open_err@transiz=0.0158 latch@transiz=+1.176 | mosso=0.213m | HOLD_n=30 RET_n=84 | PULITA
+  ep  90 | true=True | open_err@transiz=0.0063 latch@transiz=+1.189 | mosso=0.177m | HOLD_n=44 RET_n=72 | PULITA
+  ep  91 | true=True | open_err@transiz=0.0290 latch@transiz=+1.008 | mosso=0.185m | HOLD_n=31 RET_n=69 | PULITA
+  ep  92 | true=True | open_err@transiz=0.0111 latch@transiz=+1.103 | mosso=0.174m | HOLD_n=30 RET_n=67 | PULITA
+  ep  93 | true=True | open_err@transiz=0.0354 latch@transiz=+1.234 | mosso=0.179m | HOLD_n=38 RET_n=75 | PULITA
+  ep  94 | true=True | open_err@transiz=0.0231 latch@transiz=+1.231 | mosso=0.179m | HOLD_n=32 RET_n=71 | PULITA
+  ep  95 | true=True | open_err@transiz=0.0233 latch@transiz=+1.120 | mosso=0.201m | HOLD_n=33 RET_n=74 | PULITA
+  ep  96 | true=True | open_err@transiz=0.0068 latch@transiz=+1.010 | mosso=0.201m | HOLD_n=34 RET_n=76 | PULITA
+  ep  97 | true=True | open_err@transiz=0.0099 latch@transiz=+0.945 | mosso=0.183m | HOLD_n=35 RET_n=65 | PULITA
+  ep  98 | true=True | open_err@transiz=0.0380 latch@transiz=+1.315 | mosso=0.186m | HOLD_n=30 RET_n=76 | PULITA
+  ep  99 | true=True | open_err@transiz=0.0154 latch@transiz=+1.224 | mosso=0.185m | HOLD_n=38 RET_n=71 | PULITA
+  ep 100 | true=True | open_err@transiz=0.0127 latch@transiz=+1.135 | mosso=0.182m | HOLD_n=30 RET_n=62 | PULITA
+
+============================================================================
+DIAGNOSTICA FASI APERTURA — det (curr1_posa_variabile, 100 episodi)
+============================================================================
+  T3 HOLD_OPEN ‖a‖   : IQM 0.3918 [0.3863, 0.3973] (95% CI) | %<0.05=0.2%  %>0.30=69.0%
+  T4 RETREAT polso   : IQM 0.6860 [0.6819, 0.6899] (95% CI) | %>0.1=99.2%
+  T5a open_err@trans : media=0.0212 rad | % oltre tol(0.05): 0.0303 [0.0104, 0.0853] (95% CI)
+  T5b latch@trans    : media=+1.120 rad [+0.709,+1.408] (carico che il riporto §1.46 deve scaricare)
+  T6 scostamenti HOLD:
+      per EPISODIO (da citare): 9/100 episodi con almeno uno scostamento OLTRE il goal, 3/100 con almeno uno SOTTO
+      per STEP (non episodio-pesato): 640 step (78 oltre, 562 sotto) — i 3 episodi peggiori pesano il 91% del totale
+      |err| max 0.0805 rad, severi(>2·tol) 0
+  T7 allontanamento  : IQM 0.1845 [0.1819, 0.1873] (95% CI) m | CVaR peggior 10% = 0.1360 m | fermi sulla maniglia (<0.06 m): 0.0000 [0.0000, 0.0374] (95% CI) sui 99 episodi che raggiungono il RETREAT (1 non lo raggiungono)
+============================================================================
+
+Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/phase
+[OK] phase_diagnostics in 35.3s
+
+##############################################################################
+# SUITE: robustness_analysis
+##############################################################################
+============================================================================
+ROBUSTEZZA / INVILUPPO OPERATIVO — APERTURA v2 (curr1_posa_variabile, 300 episodi)
+============================================================================
+  raccolti 25/300 episodi
+  raccolti 50/300 episodi
+  raccolti 75/300 episodi
+  raccolti 100/300 episodi
+  raccolti 125/300 episodi
+  raccolti 150/300 episodi
+  raccolti 175/300 episodi
+  raccolti 200/300 episodi
+  raccolti 225/300 episodi
+  raccolti 250/300 episodi
+  raccolti 275/300 episodi
+  raccolti 300/300 episodi
+
+  Frizione maniglia:
+    [0.300,0.447]  n= 50  true= 92.0% [81.2,96.8]
+    [0.447,0.614]  n= 50  true= 96.0% [86.5,98.9]
+    [0.614,0.747]  n= 50  true= 88.0% [76.2,94.4]
+    [0.747,0.929]  n= 50  true= 80.0% [67.0,88.8]
+    [0.929,1.047]  n= 50  true= 78.0% [64.8,87.2]
+    [1.047,1.198]  n= 50  true= 94.0% [83.8,97.9]
+
+  Raggio maniglia (m):
+    [0.014,0.016]  n= 50  true= 86.0% [73.8,93.0]
+    [0.016,0.018]  n= 50  true= 80.0% [67.0,88.8]
+    [0.018,0.021]  n= 50  true= 84.0% [71.5,91.7]
+    [0.021,0.023]  n= 50  true=100.0% [92.9,100.0]
+    [0.023,0.026]  n= 50  true= 92.0% [81.2,96.8]
+    [0.026,0.028]  n= 50  true= 86.0% [73.8,93.0]
+
+  Rigidità latch (×base):
+    [0.509,0.710]  n= 50  true= 92.0% [81.2,96.8]
+    [0.710,0.933]  n= 50  true= 86.0% [73.8,93.0]
+    [0.933,1.170]  n= 50  true= 96.0% [86.5,98.9]
+    [1.170,1.503]  n= 50  true= 86.0% [73.8,93.0]
+    [1.503,1.776]  n= 50  true= 90.0% [78.6,95.7]
+    [1.776,2.000]  n= 50  true= 78.0% [64.8,87.2]
+
+  Smorzamento cerniera (×base):
+    [0.307,0.489]  n= 50  true= 90.0% [78.6,95.7]
+    [0.489,0.675]  n= 50  true= 94.0% [83.8,97.9]
+    [0.675,0.852]  n= 50  true= 84.0% [71.5,91.7]
+    [0.852,1.070]  n= 50  true= 84.0% [71.5,91.7]
+    [1.070,1.288]  n= 50  true= 84.0% [71.5,91.7]
+    [1.288,1.499]  n= 50  true= 92.0% [81.2,96.8]
+
+  Massa porta (×base):
+    [0.501,0.756]  n= 50  true= 84.0% [71.5,91.7]
+    [0.756,1.015]  n= 50  true= 88.0% [76.2,94.4]
+    [1.015,1.230]  n= 50  true= 90.0% [78.6,95.7]
+    [1.230,1.485]  n= 50  true= 90.0% [78.6,95.7]
+    [1.485,1.680]  n= 50  true= 92.0% [81.2,96.8]
+    [1.680,1.993]  n= 50  true= 84.0% [71.5,91.7]
+
+  Goal di apertura (rad):
+    [0.340,0.351]  n= 50  true= 42.0% [29.4,55.8]
+    [0.351,0.360]  n= 50  true= 98.0% [89.5,99.6]
+    [0.360,0.368]  n= 50  true= 96.0% [86.5,98.9]
+    [0.368,0.380]  n= 50  true=100.0% [92.9,100.0]
+    [0.380,0.390]  n= 50  true= 98.0% [89.5,99.6]
+    [0.390,0.400]  n= 50  true= 94.0% [83.8,97.9]
+
+  Distanza porta (x, m):
+    [-0.130,-0.127]  n= 50  true= 90.0% [78.6,95.7]
+    [-0.127,-0.124]  n= 50  true= 88.0% [76.2,94.4]
+    [-0.124,-0.121]  n= 50  true= 88.0% [76.2,94.4]
+    [-0.121,-0.117]  n= 50  true= 88.0% [76.2,94.4]
+    [-0.117,-0.114]  n= 50  true= 88.0% [76.2,94.4]
+    [-0.114,-0.110]  n= 50  true= 86.0% [73.8,93.0]
+
+  True success complessivo : 0.8800 [0.8383, 0.9120] (95% CI)
+  Clean success complessivo: 0.8800 [0.8383, 0.9120] (95% CI)
+============================================================================
+Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/robustness
+[OK] robustness_analysis in 92.3s
+
+##############################################################################
+# SUITE: ablation_study
+##############################################################################
+============================================================================
+STUDIO DI ABLAZIONE — APERTURA v2 (curr1_posa_variabile, 50 episodi, seed appaiati)
+============================================================================
+  baseline             succ=50/50 true=45/50 clean=45/50 len_iqm=141.5 mosso_iqm=0.183m
+  no_clean_release     succ=50/50 true=45/50 clean=45/50 len_iqm=140.7 mosso_iqm=0.183m
+  no_grip_lock         succ=0/50 true=0/50 clean=0/50 len_iqm=600.0 mosso_iqm=0.000m
+  no_rampup            succ=50/50 true=43/50 clean=43/50 len_iqm=141.5 mosso_iqm=0.186m
+  no_escape            succ=50/50 true=3/50 clean=3/50 len_iqm=148.6 mosso_iqm=0.157m
+  no_latch_restore     succ=50/50 true=0/50 clean=0/50 len_iqm=140.2 mosso_iqm=0.028m
+  no_cage              succ=50/50 true=36/50 clean=36/50 len_iqm=158.7 mosso_iqm=0.178m
+  no_all_overrides     succ=0/50 true=0/50 clean=0/50 len_iqm=600.0 mosso_iqm=0.000m
+
+  Confronti vs baseline (true success):
+    variante               Δtrue%               95% CI   Fisher p   p(Holm)
+    no_clean_release        +0.0% [ -12.7, +12.7]          1         1
+    no_grip_lock           -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
+    no_rampup               -4.0% [ -17.4,  +9.4]       0.76         1
+    no_escape              -84.0% [ -90.9, -68.7]   8.97e-19  3.59e-18
+    no_latch_restore       -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
+    no_cage                -18.0% [ -32.8,  -2.5]     0.0395     0.119
+    no_all_overrides       -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
+
+  Confronti vs baseline (clean success = ritiro davvero completato):
+    no_clean_release        +0.0% [ -12.7, +12.7]          1         1
+    no_grip_lock           -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
+    no_rampup               -4.0% [ -17.4,  +9.4]       0.76         1
+    no_escape              -84.0% [ -90.9, -68.7]   8.97e-19  3.59e-18
+    no_latch_restore       -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
+    no_cage                -18.0% [ -32.8,  -2.5]     0.0395     0.119
+    no_all_overrides       -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
+============================================================================
+Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/ablation
+[OK] ablation_study in 209.5s
+
+==============================================================================
+COMPLETATO: 6/6 batterie OK
+==============================================================================

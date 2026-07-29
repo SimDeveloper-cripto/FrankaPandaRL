@@ -4,6 +4,9 @@
     "stiffness": 1.0,
     "damping": 0.0,
     "return_steps": 15,
+    "return_steps_neutral": 18,
+    "term_tol": 0.15,
+    "neutral_tol": 0.05,
     "trajectory": [
       1.3618747522201373,
       1.2719907919926237,
@@ -2183,6 +2186,15 @@
     "effective_max": 0.4,
     "goal_frac_min": 0.85,
     "goal_frac_max": 1.0
+  },
+  "fsm_friction_window": {
+    "min": 0.24,
+    "max": 0.96,
+    "frac_above": 0.28,
+    "frac_below": 0.0,
+    "frac_saturated": 0.28,
+    "realized_min": 0.3038258014394323,
+    "realized_max": 1.1984157282416632
   },
   "summary": {
     "passed": 4,

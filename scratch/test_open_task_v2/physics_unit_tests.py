@@ -46,12 +46,28 @@ from _common import (find_repo_root, make_raw_env, results_dir, setup_matplotlib
 find_repo_root()
 import robosuite as suite  # noqa: E402
 
-LATCH_NEUTRAL = 0.15            # = cfg.retreat_latch_term_tol (soglia di uscita pulita)
+# Soglia usata da T1. Viene LETTA DAL CONFIG (non hardcodata) per non poter divergere dal
+# codice valutato. Nel pipeline ne esistono DUE, ed è voluto:
+#   retreat_latch_neutral_tol (0.05) — il riporto §1.46 considera la leva "a posto"
+#   retreat_latch_term_tol    (0.15) — il reward accetta la terminazione PULITA
+# T1 verifica la seconda (è quella che decide l'esito dell'episodio) e mostra entrambe.
+LATCH_NEUTRAL = 0.15            # fallback se il config non è leggibile
 LATCH_RETURN_MAX_STEPS = 90     # 3 s a 30 Hz
 RETENTION_MAX_DRIFT = 0.05      # = cfg.open_tol_rad
 RETENTION_STEPS = 60            # 2 s a 30 Hz
 DEFAULT_PHYSICS_SEED = 12_345   # rende riproducibile il placement randomizzato
 RETENTION_MAX_ATTEMPTS = 8      # tentativi per trovare una posa senza contatto
+
+
+def _latch_thresholds():
+    """(soglia di terminazione, soglia di neutralità del riporto) dal config reale."""
+    try:
+        from open_generalized_v2.config_v2 import TrainConfigV2Open
+        c = TrainConfigV2Open()
+        return (float(getattr(c, "retreat_latch_term_tol", LATCH_NEUTRAL)),
+                float(getattr(c, "retreat_latch_neutral_tol", 0.05)))
+    except Exception:
+        return LATCH_NEUTRAL, 0.05
 
 
 def _make_rs_door():
@@ -81,17 +97,22 @@ def measure_latch_spring(start_qpos=1.4, max_steps=300, seed=DEFAULT_PHYSICS_SEE
     name = _find_joint(sim, ["latch"]) or "Door_latch_joint"
     jid, addr, dof = _joint_addrs(sim, name)
     stiffness = float(sim.model.jnt_stiffness[jid]); damping = float(sim.model.dof_damping[dof])
+    term_tol, neutral_tol = _latch_thresholds()
     sim.data.qpos[addr] = start_qpos; sim.data.qvel[dof] = 0.0; sim.forward()
-    traj, return_steps = [], None
+    traj, return_steps, return_steps_neutral = [], None, None
     for step in range(max_steps):
         a = np.zeros(env.action_dim); a[-1] = -1.0     # gripper aperto: non tocca nulla
         env.step(a)
         q = float(sim.data.qpos[addr]); traj.append(q)
-        if abs(q) < LATCH_NEUTRAL and return_steps is None:
+        if abs(q) < term_tol and return_steps is None:
             return_steps = step + 1
+        if abs(q) < neutral_tol and return_steps_neutral is None:
+            return_steps_neutral = step + 1
     env.close()
     return dict(joint=name, stiffness=stiffness, damping=damping,
-                return_steps=return_steps, trajectory=traj, final=traj[-1])
+                return_steps=return_steps, return_steps_neutral=return_steps_neutral,
+                term_tol=term_tol, neutral_tol=neutral_tol,
+                trajectory=traj, final=traj[-1])
 
 
 def test_latch_spring_returns_to_neutral():
@@ -284,7 +305,8 @@ def run(make_plots=True, run_dir=None):
         r1 = measure_latch_spring()
         p1 = (r1["return_steps"] is not None) and (r1["return_steps"] <= LATCH_RETURN_MAX_STEPS)
         out["latch_spring"] = r1
-        print(f"  T1 molla latch    : ritorno in {r1['return_steps']} step "
+        print(f"  T1 molla latch    : sotto {r1['term_tol']} in {r1['return_steps']} step, "
+              f"sotto {r1['neutral_tol']} in {r1.get('return_steps_neutral')} step "
               f"(giunto={r1['joint']}, k={r1['stiffness']:.3f}, c={r1['damping']:.3f}) "
               f"→ {'PASS' if p1 else 'FAIL'}")
         checks.append(("T1 molla del latch", "PASS" if p1 else "FAIL"))
@@ -316,6 +338,24 @@ def run(make_plots=True, run_dir=None):
                                         mean=float(v.mean()), std=float(v.std()),
                                         values=v.tolist()) for k, v in r7.items()}
         out["randomization_meta"] = meta
+        try:
+            from open_generalized_v2.config_v2 import TrainConfigV2Open
+            _c = TrainConfigV2Open()
+            fmin = float(_c.fsm_friction_min); fmax = float(_c.fsm_friction_max)
+            fv = r7["friction"]
+            out["fsm_friction_window"] = dict(
+                min=fmin, max=fmax,
+                frac_above=float((fv > fmax).mean()), frac_below=float((fv < fmin).mean()),
+                frac_saturated=float(((fv > fmax) | (fv < fmin)).mean()),
+                realized_min=float(fv.min()), realized_max=float(fv.max()))
+            if out["fsm_friction_window"]["frac_saturated"] > 0.05:
+                print(f"  [nota] finestra di normalizzazione della frizione "
+                      f"[{fmin}, {fmax}] contro range reale "
+                      f"[{fv.min():.3f}, {fv.max():.3f}]: "
+                      f"{out['fsm_friction_window']['frac_saturated']*100:.1f}% dei campioni "
+                      f"satura -> soglia di presa adattiva §3.1 inattiva in quella frazione")
+        except Exception:
+            out["fsm_friction_window"] = None
         print(f"  T7 domain rand    : raggio∈[{r7['radius'].min():.4f},{r7['radius'].max():.4f}] "
               f"frizione∈[{r7['friction'].min():.3f},{r7['friction'].max():.3f}] "
               f"latch×∈[{r7['latch_ratio'].min():.2f},{r7['latch_ratio'].max():.2f}] "
@@ -350,30 +390,70 @@ def run(make_plots=True, run_dir=None):
             fig, ax = plt.subplots(figsize=(8, 5))
             traj = out["latch_spring"]["trajectory"]; t = np.arange(len(traj)) / 30.0
             ax.plot(t, traj, color="#1f77b4")
-            ax.axhline(LATCH_NEUTRAL, ls="--", color="k"); ax.axhline(-LATCH_NEUTRAL, ls="--", color="k")
+            r1 = out["latch_spring"]
+            tt = r1.get("term_tol", LATCH_NEUTRAL); nt = r1.get("neutral_tol", 0.05)
+            for v, c, lab in [(tt, "k", f"terminazione pulita (±{tt})"),
+                              (nt, "#d62728", f"neutralità del riporto (±{nt})")]:
+                ax.axhline(v, ls="--", color=c, label=lab); ax.axhline(-v, ls="--", color=c)
+            ax.axhline(0.0, color="#999999", lw=0.6)
             ax.set_xlabel("tempo (s)"); ax.set_ylabel("latch_qpos (rad)")
-            ax.set_title("T1 — ritorno della molla del latch a neutro")
+            ax.legend(fontsize=8)
+            ax.set_title("T1 — ritorno della molla del latch a neutro\n"
+                         "due soglie distinte nel pipeline, entrambe superate da sola")
             fig.tight_layout(); fig.savefig(os.path.join(outdir, "plot_latch_spring.png"), dpi=130); plt.close(fig)
         if "door_retention" in out:
-            fig, ax = plt.subplots(figsize=(8, 5))
+            # PROBLEMA DI RESA: la curva "rilasciata ferma" coincide col goal (deriva ~1e-9),
+            # quindi sovrapposta alla sua linea sembrava ASSENTE. Rimedi: banda di
+            # tolleranza al posto della linea, curva verde spessa in primo piano, riquadro
+            # ingrandito che mostra che la linea c'è ed è piatta a scala di nanoradianti.
             r2 = out["door_retention"]
-            ax.plot([s for s, _, _ in r2["series_free"]], [q for _, q, _ in r2["series_free"]],
-                    color="#2ca02c", label="rilasciata ferma")
-            ax.plot([s for s, _, _ in r2["series_kicked"]], [q for _, q, _ in r2["series_kicked"]],
-                    color="#d62728", label="con impulso di richiusura")
-            ax.axhline(r2["target"], ls="--", color="k", label="goal")
-            ax.axhline(r2["target"] - RETENTION_MAX_DRIFT, ls=":", color="k", label="tolleranza")
+            tgt = r2["target"]
+            xf = [s for s, _, _ in r2["series_free"]]; yf = [q for _, q, _ in r2["series_free"]]
+            xk = [s for s, _, _ in r2["series_kicked"]]; yk = [q for _, q, _ in r2["series_kicked"]]
+            fig, ax = plt.subplots(figsize=(9, 5.5))
+            ax.axhspan(tgt - RETENTION_MAX_DRIFT, tgt + RETENTION_MAX_DRIFT,
+                       color="#2ca02c", alpha=0.10, label=f"tolleranza ±{RETENTION_MAX_DRIFT}")
+            ax.axhline(tgt, ls="--", lw=1.0, color="#666666", zorder=2, label="goal")
+            ax.plot(xk, yk, color="#d62728", lw=2.0, zorder=3,
+                    label=f"con impulso di richiusura (corsa {r2['drift_kicked']:.3f} rad)")
+            ax.plot(xf, yf, color="#2ca02c", lw=3.0, zorder=5, solid_capstyle="round",
+                    marker="o", markevery=max(1, len(xf) // 12), markersize=4,
+                    label=f"rilasciata ferma (deriva {r2['drift_free']:.1e} rad)")
+            ax.annotate("la curva verde è QUI:\ncoincide col goal, non deriva",
+                        xy=(xf[len(xf) // 2], tgt), xytext=(0.42, 0.78),
+                        textcoords="axes fraction", fontsize=9, color="#2ca02c",
+                        arrowprops=dict(arrowstyle="->", color="#2ca02c", lw=1.4))
+            # riquadro ingrandito sulla scala reale della deriva
+            axi = ax.inset_axes([0.60, 0.13, 0.36, 0.26])
+            axi.plot(xf, [(q - tgt) * 1e9 for q in yf], color="#2ca02c", lw=1.6)
+            axi.axhline(0.0, color="#999999", lw=0.6)
+            axi.set_title("zoom ×10⁹ sulla verde", fontsize=7)
+            axi.set_xlabel("step", fontsize=6); axi.set_ylabel("(angolo−goal) [nrad]", fontsize=6)
+            axi.tick_params(labelsize=6)
             ax.set_xlabel("step"); ax.set_ylabel("door_angle (rad)")
-            ax.set_title("T2 — la porta aperta resta aperta?"); ax.legend()
+            ax.set_title("T2 — la porta aperta resta aperta?\n"
+                         "un solo fattore variato: velocità iniziale nulla vs impulso di richiusura")
+            ax.legend(loc="lower left", fontsize=8)
             fig.tight_layout(); fig.savefig(os.path.join(outdir, "plot_door_retention.png"), dpi=130); plt.close(fig)
         if "randomization" in out:
             keys = ["friction", "radius", "latch_ratio", "damp_ratio", "mass_ratio", "goal_angle"]
             titles = ["frizione", "raggio (m)", "rigidità latch ×base",
                       "smorzamento cerniera ×base", "massa porta ×base", "goal_angle (rad)"]
-            fig, axes = plt.subplots(1, 6, figsize=(23, 3.6))
+            fig, axes = plt.subplots(1, 6, figsize=(23, 3.9))
             for ax, k, ttl in zip(axes, keys, titles):
-                safe_hist(ax, out["randomization"][k]["values"], 25, color="#2ca02c")
+                vals = out["randomization"][k]["values"]
+                safe_hist(ax, vals, 25, color="#2ca02c")
                 ax.set_title(f"{'T8' if k == 'goal_angle' else 'T7'} — {ttl}", fontsize=10)
+                # Da controllo di sanità a RISULTATO: sul pannello della frizione si
+                # sovrappongono i limiti che la FSM usa per normalizzare (§3.1). Se una
+                # parte dei campioni cade fuori, la normalizzazione satura e la soglia
+                # adattiva di presa resta bloccata al minimo per quella frazione.
+                if k == "friction" and out.get("fsm_friction_window"):
+                    w = out["fsm_friction_window"]
+                    ax.axvline(w["min"], color="#d62728", ls="--", lw=1.4)
+                    ax.axvline(w["max"], color="#d62728", ls="--", lw=1.4)
+                    ax.set_title(f"T7 — {ttl}\nfinestra FSM [{w['min']}, {w['max']}] "
+                                 f"→ {w['frac_saturated']*100:.1f}% satura", fontsize=9)
             fig.tight_layout(); fig.savefig(os.path.join(outdir, "plot_randomization.png"), dpi=130); plt.close(fig)
         print(f"  Grafici in {outdir}")
     return out
