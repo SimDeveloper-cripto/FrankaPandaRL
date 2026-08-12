@@ -220,9 +220,9 @@ class ExtendedDomainRandomizer:
             self.cfg.rand_latch_stiffness_min,
             self.cfg.rand_latch_stiffness_max,
         )
-        new_stiff = base * scale
+        new_stiff                                     = base * scale
         self.model.jnt_stiffness[self.latch_joint_id] = new_stiff
-        self.current_latch_stiffness = float(new_stiff)
+        self.current_latch_stiffness                  = float(new_stiff)
 
     def _randomize_hinge_damping(self) -> None:
         """
@@ -243,16 +243,15 @@ class ExtendedDomainRandomizer:
             self.cfg.rand_hinge_damping_min,
             self.cfg.rand_hinge_damping_max,
         )
-        new_damp = base * scale
-        self.model.dof_damping[self.hinge_dof_adr] = new_damp   # per-DOF, not per-joint
-        self.current_hinge_damping = float(new_damp)
+        new_damp                                   = base * scale
+        self.model.dof_damping[self.hinge_dof_adr] = new_damp
+        self.current_hinge_damping                 = float(new_damp)
 
     def _randomize_door_mass(self) -> None:
         """
         §3.4 — Randomize door body mass.
 
         Range: [0.5 × base, 2.0 × base]
-
         Heavier door → more resistance during PUSH → policy must apply more force.
 
         Ref: Zhao et al. (2020) §3.4 — mass is a key sim-to-real gap factor.
@@ -265,6 +264,6 @@ class ExtendedDomainRandomizer:
             self.cfg.rand_door_mass_min,
             self.cfg.rand_door_mass_max,
         )
-        new_mass = base * scale
+        new_mass                                = base * scale
         self.model.body_mass[self.door_body_id] = new_mass
-        self.current_door_mass = float(new_mass)
+        self.current_door_mass                  = float(new_mass)

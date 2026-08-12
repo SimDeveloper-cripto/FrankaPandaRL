@@ -42,9 +42,9 @@ class MultiApproachGrasp:
     the best-alignment reward term.
 
     For a cylindrical door handle, three natural grasps exist:
-        dir_top      : EEF approaches from above, z-axis pointing down
-        dir_lateral_L: EEF approaches from the left  (−Y world)
-        dir_lateral_R: EEF approaches from the right (+Y world)
+        dir_top       : EEF approaches from above, z-axis pointing down
+        dir_lateral_L : EEF approaches from the left  (−Y world)
+        dir_lateral_R : EEF approaches from the right (+Y world)
 
     The alignment reward is:
         alignment = max_i |dot(eef_z, dir_i)|
@@ -118,7 +118,6 @@ class MultiApproachGrasp:
     ) -> tuple[float, int, list[float]]:
         """
         Compute max-alignment across K candidate directions.
-
             alignment = max_i  |dot(eef_z, dir_i)|
 
         Parameters

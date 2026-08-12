@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # scratch/test_open_task_v2/run_all_tests.py
+
 """
 run_all_tests — Orchestratore della suite di test scientifica (task di APERTURA v2).
 
@@ -17,10 +18,6 @@ Batterie:
   4. robustness   — inviluppo operativo su 7 assi (inclusi goal e fisica estesa)
   5. ablation     — disattivazione degli override, confronto appaiato
 
-Modello: l'apertura v2 è addestrata al SOLO curriculum 1 (posa variabile) → un run.
-La run-dir si risolve così: --run-dir esplicito → `runs/open_gen_v2` → autodiscovery di
-`runs/open_gen_v2*` contenente un modello (viene stampato quale è stato scelto).
-
 Esempi:
   python scratch/test_open_task_v2/run_all_tests.py --preset standard
   python scratch/test_open_task_v2/run_all_tests.py --preset full
@@ -37,22 +34,20 @@ import time
 import argparse
 import datetime
 import platform
-import subprocess
 import traceback
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import (results_dir, REPO_ROOT, json_default, resolve_run_dir,  # noqa: E402
-                     find_model, CURRICULUM)
+from _common import (results_dir, REPO_ROOT, json_default, resolve_run_dir, find_model, CURRICULUM)
 
 PRESETS = {
-    "quick":    dict(evaluate=30,  phase=15, robust=60,  ablation=15),
-    "standard": dict(evaluate=100, phase=30, robust=150, ablation=30),
-    # `phase` alzato a 100: con 30 episodi gli istogrammi T5/T6/T7 restano spigolosi e
-    # poco leggibili in stampa. Costa ~35 s in più.
-    "full":     dict(evaluate=200, phase=100, robust=300, ablation=50),
+    "quick"   : dict(evaluate=30,  phase=15,  robust=60,  ablation=15),
+    "standard": dict(evaluate=100, phase=30,  robust=150, ablation=30),
+    "full"    : dict(evaluate=200, phase=100, robust=300, ablation=50),
 }
+
 ALL_SUITES = ["functional", "physics", "evaluate", "phase", "robustness", "ablation"]
-TAG = "curr1_posa_variabile"
+TAG        = "curr1_posa_variabile"
 
 
 def collect_meta(args, run_dir):
@@ -64,22 +59,21 @@ def collect_meta(args, run_dir):
 
     def git_hash():
         try:
-            return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                           cwd=REPO_ROOT,
-                                           stderr=subprocess.DEVNULL).decode().strip()
+            return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd = REPO_ROOT,
+                                        stderr = subprocess.DEVNULL).decode().strip()
         except Exception:
             return "n/a"
-    return dict(timestamp=datetime.datetime.now().isoformat(timespec="seconds"),
-                repo_root=REPO_ROOT, git_commit=git_hash(),
-                run_dir=run_dir, model=find_model(run_dir, quiet=True) or "n/d",
-                curriculum=CURRICULUM,
-                python=platform.python_version(), platform=platform.platform(),
-                versions=dict(numpy=ver("numpy"), scipy=ver("scipy"),
-                              stable_baselines3=ver("stable_baselines3"),
-                              robosuite=ver("robosuite"), torch=ver("torch"),
-                              gymnasium=ver("gymnasium")),
-                args=vars(args))
-
+    return dict(timestamp  = datetime.datetime.now().isoformat(timespec="seconds"),
+                repo_root  = REPO_ROOT, git_commit = git_hash(),
+                run_dir    = run_dir, model = find_model(run_dir, quiet=True) or "n/d",
+                curriculum = CURRICULUM,
+                python     = platform.python_version(), platform=platform.platform(),
+                versions   = dict(numpy = ver("numpy"), scipy = ver("scipy"),
+                              stable_baselines3 = ver("stable_baselines3"),
+                              robosuite         = ver("robosuite"),
+                              torch             = ver("torch"),
+                              gymnasium         = ver("gymnasium")),
+                args = vars(args))
 
 def guarded(name, fn):
     print("\n" + "#" * 78); print(f"# SUITE: {name}"); print("#" * 78)
@@ -87,12 +81,11 @@ def guarded(name, fn):
     try:
         res = fn(); dt = time.time() - t0
         print(f"[OK] {name} in {dt:.1f}s")
-        return dict(status="ok", seconds=dt, result=res)
+        return dict(status = "ok", seconds = dt, result = res)
     except Exception as e:
         dt = time.time() - t0
         print(f"[FAIL] {name}: {e}"); traceback.print_exc()
-        return dict(status="fail", seconds=dt, error=str(e))
-
+        return dict(status = "fail", seconds = dt, error = str(e))
 
 BIBLIO = """\
 ## Bibliografia
@@ -127,7 +120,6 @@ BIBLIO = """\
 15. ManipForce (2015) — soglie di presa adattive alla frizione/contatto (§3.1, §1.18).
 16. Handa et al. (2020) *DexPilot* — rappresentazione del contatto, direzione di approccio.
 """
-
 
 def _fmt_ci(d):
     if not isinstance(d, dict) or "point" not in d:
@@ -171,7 +163,7 @@ def build_report(meta, suites):
 
     ph = suites.get("physics")
     if ph and ph["status"] == "ok":
-        summ = ph["result"].get("summary", {})
+        summ  = ph["result"].get("summary", {})
         n_inv = summ.get("invalid", 0)
         L.append("## 1. Physics unit tests\n")
         L.append(f"Esito: **{summ.get('passed','?')}/{summ.get('total','?')} PASS**"
@@ -208,7 +200,7 @@ def build_report(meta, suites):
                      f"| {_fmt_ci(m['clean_success_rate'])} | {m['length_iqm']['point']:.1f} "
                      f"| {m['open_error_end_iqm']['point']:.4f} "
                      f"| {_fmt_ci(m['stuck_on_handle']['ci'])} |")
-        det = ev["result"].get("det")
+        det  = ev["result"].get("det")
         triv = (det or {}).get("trivial_reference")
         if triv:
             L.append(f"\n**Riferimento banale.** Una policy costante che ignora il goal e "
@@ -234,13 +226,13 @@ def build_report(meta, suites):
 
     pd = suites.get("phase")
     if pd and pd["status"] == "ok":
-        d = pd["result"]
-        t3 = d.get("T3_hold_action_norm") or {}
-        t4 = d.get("T4_retreat_wrist_rot") or {}
+        d   = pd["result"]
+        t3  = d.get("T3_hold_action_norm")         or {}
+        t4  = d.get("T4_retreat_wrist_rot")        or {}
         t5a = d.get("T5_open_error_at_transition") or {}
-        t5b = d.get("T5_latch_at_transition") or {}
-        t6 = d.get("T6_deviation_events") or d.get("T6_regress_events") or {}
-        t7 = d.get("T7_retreat_moved") or {}
+        t5b = d.get("T5_latch_at_transition")      or {}
+        t6  = d.get("T6_deviation_events")         or d.get("T6_regress_events") or {}
+        t7  = d.get("T7_retreat_moved")            or {}
         L.append("## 3. Diagnostica fasi HOLD_OPEN / RETREAT\n")
         L.append("| Metrica | Valore |"); L.append("|---|---|")
         L.append(f"| T3 ‖azione braccio‖ in HOLD_OPEN (IQM) | {(t3.get('iqm') or {}).get('point', float('nan')):.3f} |")
@@ -292,16 +284,6 @@ def build_report(meta, suites):
                      f"{cs['diff']['point']*100:+.1f} pt | "
                      f"{cs.get('fisher_p_holm', float('nan')):.3g} |")
         L.append("\nForest plot: `results/ablation/`.\n")
-        L.append("> **Due precisazioni obbligatorie.**\n>\n"
-                 "> 1. **«Nessun effetto» non è dimostrato** per i bracci non significativi. "
-                 "Con n = 30 gli intervalli sono ampi decine di punti: si può escludere un "
-                 "effetto *grande*, non un effetto. La formulazione corretta è «nessun "
-                 "effetto **rilevabile a questa numerosità**».\n>\n"
-                 "> 2. **È un'ablazione del controllore dispiegato, non dell'algoritmo di "
-                 "apprendimento.** Gli override vengono disattivati su una policy *già "
-                 "addestrata con quegli override attivi*: si misura quanto il comportamento "
-                 "finale ne dipende — domanda legittima e ben posta — ma **non** che senza di "
-                 "essi non si sarebbe potuto imparare qualcos'altro.\n")
 
     L.append("## Limiti dichiarati\n")
     L.append("Sono limiti di **disegno**, non di esecuzione: dichiararli è parte del "
@@ -335,31 +317,29 @@ def build_report(meta, suites):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Esegue tutta la suite di test dell'apertura v2")
-    ap.add_argument("--preset", choices=list(PRESETS), default="standard")
-    ap.add_argument("--episodes", type=int, default=None,
-                    help="forza lo stesso numero di episodi per tutte le batterie")
-    ap.add_argument("--suites", nargs="+", default=ALL_SUITES, choices=ALL_SUITES)
-    ap.add_argument("--run-dir", type=str, default=None)
-    ap.add_argument("--curriculum", type=float, default=CURRICULUM)
-    ap.add_argument("--ablation-quick", action="store_true",
-                    help="ablaziona solo i tre override specifici dell'apertura + il totale")
-    ap.add_argument("--no-plots", action="store_true")
+    ap = argparse.ArgumentParser(description = "Esegue tutta la suite di test dell'apertura v2")
+    ap.add_argument("--preset",     choices = list(PRESETS), default = "standard")
+    ap.add_argument("--episodes",   type    = int,   default = None, help = "forza lo stesso numero di episodi per tutte le batterie")
+    ap.add_argument("--suites",     nargs   = "+",   default = ALL_SUITES, choices = ALL_SUITES)
+    ap.add_argument("--run-dir",    type    = str,   default = None)
+    ap.add_argument("--curriculum", type    = float, default = CURRICULUM)
+
+    ap.add_argument("--ablation-quick", action = "store_true", help="ablaziona solo i tre override specifici dell'apertura + il totale")
+    ap.add_argument("--no-plots",       action = "store_true")
     args = ap.parse_args()
 
     ep = PRESETS[args.preset].copy()
     if args.episodes is not None:
         ep = {k: args.episodes for k in ep}
 
-    run_dir = resolve_run_dir(args.run_dir)
+    run_dir     = resolve_run_dir(args.run_dir)
     needs_model = any(s in args.suites for s in ("evaluate", "phase", "robustness", "ablation"))
-    if needs_model and find_model(run_dir, quiet=True) is None:
+    if needs_model and find_model(run_dir, quiet = True) is None:
         print(f"\n[ATTENZIONE] nessun modello trovato in '{run_dir}'.")
-        print("             Le batterie che usano la policy falliranno; passa --run-dir "
-              "con la cartella giusta,")
+        print("             Le batterie che usano la policy falliranno; passa --run-dir con la cartella giusta,")
         print("             oppure lancia solo: --suites functional physics\n")
 
-    meta = collect_meta(args, run_dir)
+    meta   = collect_meta(args, run_dir)
     suites = {}
     import importlib
 
@@ -371,27 +351,25 @@ def main():
         m = importlib.import_module("physics_unit_tests")
         suites["physics"] = guarded(
             "physics_unit_tests",
-            lambda: m.run(make_plots=not args.no_plots, run_dir=run_dir))
+            lambda: m.run(make_plots = not args.no_plots, run_dir = run_dir))
 
     if "evaluate" in args.suites:
         m = importlib.import_module("evaluate_policy")
         suites["evaluate"] = guarded(
             "evaluate_policy",
-            lambda: m.run(ep["evaluate"], args.curriculum, run_dir,
-                          make_plots_flag=not args.no_plots, tag=TAG))
+            lambda: m.run(ep["evaluate"], args.curriculum, run_dir, make_plots_flag = not args.no_plots, tag = TAG))
 
     if "phase" in args.suites:
         m = importlib.import_module("phase_diagnostics")
         suites["phase"] = guarded(
             "phase_diagnostics",
-            lambda: m.run(ep["phase"], True, args.curriculum, run_dir, tag=TAG))
+            lambda: m.run(ep["phase"], True, args.curriculum, run_dir, tag = TAG))
 
     if "robustness" in args.suites:
         m = importlib.import_module("robustness_analysis")
         suites["robustness"] = guarded(
             "robustness_analysis",
-            lambda: m.run(ep["robust"], args.curriculum, run_dir,
-                          deterministic=True, tag=TAG))
+            lambda: m.run(ep["robust"], args.curriculum, run_dir, deterministic = True, tag = TAG))
 
     if "ablation" in args.suites:
         m = importlib.import_module("ablation_study")
@@ -400,11 +378,11 @@ def main():
         suites["ablation"] = guarded(
             "ablation_study",
             lambda: m.run(ep["ablation"], args.curriculum, run_dir,
-                          deterministic=True, variants=variants, tag=TAG))
+                          deterministic = True, variants = variants, tag = TAG))
 
     outdir = results_dir()
     with open(os.path.join(outdir, "run_meta.json"), "w") as f:
-        json.dump(meta, f, indent=2, default=json_default)
+        json.dump(meta, f, indent = 2, default = json_default)
 
     def slim(o):
         if isinstance(o, dict):
@@ -419,17 +397,17 @@ def main():
     agg = {name: (dict(status=s["status"], seconds=s["seconds"], result=slim(s.get("result")))
                   if s["status"] == "ok" else s) for name, s in suites.items()}
     with open(os.path.join(outdir, "all_results.json"), "w") as f:
-        json.dump(agg, f, indent=2, default=json_default)
+        json.dump(agg, f, indent = 2, default = json_default)
 
     with open(os.path.join(outdir, "REPORT.md"), "w") as f:
         f.write(build_report(meta, suites))
 
     print("\n" + "=" * 78)
     n_ok = sum(1 for s in suites.values() if s["status"] == "ok")
+
     print(f"COMPLETATO: {n_ok}/{len(suites)} batterie OK")
     print(f"Report: {os.path.join(outdir, 'REPORT.md')}")
     print("=" * 78)
-
 
 if __name__ == "__main__":
     main()

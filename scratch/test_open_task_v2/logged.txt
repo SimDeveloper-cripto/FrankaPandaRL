@@ -518,7 +518,7 @@ VALUTAZIONE APERTURA — Train (stocastica) (curriculum=1.0, 200 episodi)
 ============================================================================
 
 Genero i grafici…
-Fatto. Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/evaluate
+Fatto.
 [OK] evaluate_policy in 136.2s
 
 ##############################################################################
@@ -639,7 +639,6 @@ DIAGNOSTICA FASI APERTURA — det (curr1_posa_variabile, 100 episodi)
   T7 allontanamento  : IQM 0.1845 [0.1819, 0.1873] (95% CI) m | CVaR peggior 10% = 0.1360 m | fermi sulla maniglia (<0.06 m): 0.0000 [0.0000, 0.0374] (95% CI) sui 99 episodi che raggiungono il RETREAT (1 non lo raggiungono)
 ============================================================================
 
-Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/phase
 [OK] phase_diagnostics in 35.3s
 
 ##############################################################################
@@ -720,7 +719,6 @@ ROBUSTEZZA / INVILUPPO OPERATIVO — APERTURA v2 (curr1_posa_variabile, 300 epis
   True success complessivo : 0.8800 [0.8383, 0.9120] (95% CI)
   Clean success complessivo: 0.8800 [0.8383, 0.9120] (95% CI)
 ============================================================================
-Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/robustness
 [OK] robustness_analysis in 92.3s
 
 ##############################################################################
@@ -757,7 +755,6 @@ STUDIO DI ABLAZIONE — APERTURA v2 (curr1_posa_variabile, 50 episodi, seed appa
     no_cage                -18.0% [ -32.8,  -2.5]     0.0395     0.119
     no_all_overrides       -90.0% [ -95.7, -76.6]    6.9e-23  4.83e-22
 ============================================================================
-Risultati in /Users/simone/workspace/FrankaPandaRL/scratch/test_open_task_v2/results/ablation
 [OK] ablation_study in 209.5s
 
 ==============================================================================
