@@ -102,11 +102,11 @@ export PROGETTI_ORIGINALI="$(cd .. && pwd)"
 python3 train_unified.py --task close --total-steps 1000000
 python3 train_unified.py --task open  --total-steps 1000000
 
+python3 train_unified.py --task close --eval --episodes 20
+python3 train_unified.py --task open  --eval --episodes 20
+
 mjpython train_unified.py --task close --play
 mjpython train_unified.py --task open  --play --slow 2
-
-mjpython train_unified.py --task close --eval --episodes 20
-mjpython train_unified.py --task open  --eval --episodes 20
 ```
 
 
@@ -116,8 +116,9 @@ mjpython train_unified.py --task open  --eval --episodes 20
 - [OK] Generalization of the Generalized Door Closing Task (curr 0) __runs/close_gen_v2_curriculum_0_new_110626/__
 - [OK] Generalization of the Generalized Door Closing Task (curr 1) __runs/close_gen_v2_curriculum_1_new_110626/__
 - [OK] Generalization of the Generalized Door Opening Task (curr 1) __runs/open_gen_v2/__
-- [] Unified Reward Machine for both Tasks (curr 1) __/__
+- [] Unified Reward Machine for both Tasks (curr 1) __unified_door/runs/__
 
 ### Test Results Folders (trained models)
 
 - [OK] __scratch/__
+- [] __unified_door/tests/__
