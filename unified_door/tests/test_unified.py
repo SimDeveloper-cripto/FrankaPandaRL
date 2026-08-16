@@ -39,15 +39,16 @@ def test_due_compiti_una_macchina():
     do = DoorState(0, 0, 0.05); do.reset(0.0, 0.384, 0.05)
     check(dc.sigma == -1.0 and do.sigma == +1.0, "§4 σ opposto nei due compiti")
     check(abs(dc.escursione - do.escursione) < 0.05, "§4 escursioni confrontabili")
-    # la differenza fra i due compiti è SOLO nei dieci parametri del §6
-    dieci = {"theta_star_frac", "theta_zero_frac", "tol", "t_hold_s",
-             "d_ret", "z_ret", "orienta_normale", "riporto_leva",
-             "leva_rilascio", "escape"}
+    # la differenza fra i due compiti è SOLO nei nove parametri del §6
+    nove = {"theta_star_frac", "theta_zero_frac", "tol", "t_hold_s",
+            "d_ret", "z_ret", "orienta_normale", "riporto_leva", "escape"}
     diversi = {k for k in vars(cc.task) if k != "nome"
                and getattr(cc.task, k) != getattr(co.task, k)}
-    check(diversi <= dieci, f"§6 differenze fuori dai dieci parametri: {diversi - dieci}")
-    check(cc.task.leva_rilascio == 0.0, "§6 chiusura: nessun blocco di chiavistello")
-    check(co.task.leva_rilascio == 1.03, "§6 apertura: rilascio a |leva| = 1.03 rad")
+    check(diversi <= nove, f"§6 differenze fuori dai nove parametri: {diversi - nove}")
+    check(len(nove) == len(vars(cc.task)) - 1, "§6 TaskSpec ha esattamente nove campi")
+    # la soglia di sblocco NON è un parametro di compito: è geometria della porta
+    check(cc.thr.leva_rilascio == co.thr.leva_rilascio == 1.23,
+          "§7 il chiavistello blocca in entrambi i versi: soglia unica, 1.23 rad")
     # i pesi sono gli stessi oggetti per i due compiti
     check(vars(cc.w) == vars(co.w), "§1 i pesi non dipendono dal compito")
     # iperparametri invariati (§6)
@@ -119,39 +120,74 @@ def test_cricchetto_ancorato_e_non_distruttivo():
           "§7 il tratto non incassato resta da incassare, non sparisce")
 
 
-def test_leva_come_seconda_porta():
-    """§8 — dove il chiavistello blocca, la leva è il primo tratto della corsa.
+def test_leva_come_primo_tratto():
+    """§7 — la leva è il primo tratto della corsa, nei DUE compiti, ma con un
+    BUDGET SUO, non in concorrenza con la cerniera.
 
-    Due proprietà, entrambe dichiarate nel documento:
-      · con `leva_rilascio` = 0 (chiusura) NULLA cambia rispetto a prima;
-      · con `leva_rilascio` > 0 (apertura) girare la leva produce `progress`
-        e alza `avanzamento` anche a cerniera perfettamente ferma.
+    Il chiavistello blocca la porta in entrambi i versi: con la leva a riposo la
+    porta si ferma a 0.182 rad chiudendo e a 0.015 aprendo. Girarla è quindi
+    lavoro utile in entrambi i casi, e va pagato in entrambi.
+
+    Ma NON dallo stesso budget. Con `escursione = |θ*−θ₀| + leva_rilascio` la
+    leva (1.23 rad) si prende l'80 % dei 700 punti e alla cerniera resta il
+    20 %: il gradiente sull'angolo della porta scende a 458 per radiante e
+    l'apertura, dove la cerniera È il compito, resta senza segnale. Togliendo la
+    leva l'apertura riparte ma la chiusura si pianta contro il catenaccio —
+    misurato, 18 valutazioni su 20 ferme a errore +0.1755, sempre lo stesso
+    valore. `quota_leva` dà a ciascun tratto il suo budget: stessa formula per i
+    due compiti, nessun ramo per task.
     """
-    # chiusura: comportamento identico a leva assente
-    c = DoorState(theta_star=0.0, theta_zero=0.35, tol=0.03)
-    c.reset(0.35, 0.0, 0.03, leva_rilascio=0.0)
-    check(abs(c.escursione - 0.35) < 1e-9, "§8 chiusura: escursione = |θ* − θ₀|")
-    d1 = _avanza(c, 0.20, leva=0.0)
-    c2 = DoorState(theta_star=0.0, theta_zero=0.35, tol=0.03)
-    c2.reset(0.35, 0.0, 0.03, leva_rilascio=0.0)
-    d2 = _avanza(c2, 0.20, leva=-1.30)
-    check(d1 == d2, "§8 con leva_rilascio = 0 la leva non entra nel progresso")
+    thr = UnifiedConfig.per("close").thr
+    L, Q = thr.leva_rilascio, thr.quota_leva
+    check(0.0 < Q < 0.5, "§7 la leva è un MEZZO: la sua quota è minore di 1/2")
+    for nome, th0, ths, tol in (("chiusura", 0.35, 0.006, 0.03),
+                                ("apertura", 0.0, 0.37, 0.05)):
+        cerniera = abs(ths - th0)
+        d = DoorState(theta_star=ths, theta_zero=th0, tol=tol)
+        d.reset(th0, ths, tol, leva_rilascio=L, quota_leva=Q)
+        leva_eq = cerniera * Q / (1.0 - Q)
+        check(abs(d.escursione - (cerniera + leva_eq)) < 1e-9,
+              f"§7 {nome}: escursione = cerniera + leva riscalata")
+        # la quota di budget è la stessa nei due compiti, e vale Q
+        check(abs(leva_eq / d.escursione - Q) < 1e-9,
+              f"§7 {nome}: alla leva spetta esattamente quota_leva del budget")
+        check(abs(cerniera / d.escursione - (1.0 - Q)) < 1e-9,
+              f"§7 {nome}: alla cerniera spetta il resto")
+        check(d.avanzamento == 0.0, f"§7 {nome}: a leva ferma l'avanzamento è nullo")
+        d.ancora()                                   # ingresso in MOVE
+        check(_avanza(d, th0, leva=-L / 2) > 0.0,
+              f"§7 {nome}: girare la leva PAGA anche a cerniera ferma")
+        check(abs(d.avanzamento - Q / 2) < 1e-6,
+              f"§7 {nome}: mezza leva = metà della quota della leva")
+        _avanza(d, th0, leva=-(L + 0.3))             # leva oltre lo sblocco
+        check(abs(d.avanzamento - Q) < 1e-6,
+              f"§7 {nome}: oltre lo sblocco la leva non paga più")
+        _avanza(d, ths, leva=-(L + 0.3))             # cerniera al bersaglio
+        check(abs(d.avanzamento - 1.0) < 1e-9,
+              f"§7 {nome}: leva + cerniera = corsa completa")
+        check(_avanza(d, th0, leva=0.0) == 0.0,
+              f"§7 {nome}: tornare indietro non ripaga (cricchetto)")
 
-    # apertura: la corsa totale è leva + cerniera
-    a = DoorState(theta_star=0.37, theta_zero=0.0, tol=0.05)
-    a.reset(0.0, 0.37, 0.05, leva_rilascio=1.03)
-    check(abs(a.escursione - 1.40) < 1e-9, "§8 apertura: escursione = leva + cerniera")
-    check(a.avanzamento == 0.0, "§8 a riposo l'avanzamento è nullo")
-    a.ancora()                                 # ingresso in MOVE, leva ancora a riposo
-    dl = _avanza(a, 0.0, leva=-0.515)          # mezza leva, porta ferma
-    check(dl > 0.0, "§8 girare la leva PAGA anche a cerniera ferma")
-    check(abs(a.avanzamento - 0.5 * 1.03 / 1.40) < 1e-6, "§8 avanzamento = frazione di corsa")
-    _avanza(a, 0.0, leva=-1.45)                # leva oltre il rilascio
-    check(abs(a.avanzamento - 1.03 / 1.40) < 1e-6, "§8 oltre il rilascio la leva non paga più")
-    _avanza(a, 0.37, leva=-1.45)               # porta al bersaglio
-    check(abs(a.avanzamento - 1.0) < 1e-9, "§8 leva + cerniera = corsa completa")
-    # il cricchetto vale sul lavoro composto
-    check(_avanza(a, 0.20, leva=0.0) == 0.0, "§8 tornare indietro non ripaga (cricchetto)")
+
+def test_gradiente_cerniera_non_soffocato():
+    """§7 — il gradiente sull'angolo della porta deve restare forte nei DUE compiti.
+
+    È il numero che decide quale compito si risolve. Prima: 458 per radiante,
+    con l'apertura ferma allo 0.21 e in calo. La cerniera deve prendersi la
+    maggioranza del budget in entrambi i casi.
+    """
+    for task in ("close", "open"):
+        cfg = UnifiedConfig.per(task)
+        thr = cfg.thr
+        for cerniera in (0.30, 0.39):
+            d = DoorState(theta_star=cerniera, theta_zero=0.0, tol=cfg.task.tol)
+            d.reset(0.0, cerniera, cfg.task.tol,
+                    leva_rilascio=thr.leva_rilascio, quota_leva=thr.quota_leva)
+            w = cfg.w.w_progress(d.escursione)
+            check(w > 900.0,
+                  f"§7 {task}: gradiente cerniera {w:.0f}/rad, era 458")
+            check(abs(w * cerniera - cfg.w.budget_progress * (1 - thr.quota_leva)) < 1.0,
+                  f"§7 {task}: alla cerniera va budget × (1 − quota_leva)")
 
 
 def test_target_rampa():
@@ -194,6 +230,96 @@ def test_gate_bilaterale():
     d.step(0.37)          # al bersaglio
     _passo(f, d)
     check(f.s.fase == Fase.HOLD, "§3 al bersaglio entra in HOLD")
+
+
+def test_nessun_vicolo_cieco():
+    """§3 — da MOVE e da HOLD si esce SEMPRE. Due deadlock misurati e chiusi.
+
+    1. MOVE: con la porta al bersaglio e la mano nella finestra fra la soglia di
+       conferma (0.035 m) e quella di perdita (0.05 m), il vecchio gate
+       `A ∧ presa_ok` non scattava e nemmeno `presa_persa`: l'episodio restava
+       in MOVE fino all'orizzonte con la porta GIA' al posto giusto.
+    2. HOLD: con la guardia azzerata a ogni frame dentro tolleranza, una porta
+       che oscilla dentro/fuori teneva timer e guardia entrambi a zero.
+    """
+    cfg, f = _fsm("close")
+    d = DoorState(theta_star=0.006, theta_zero=0.35, tol=0.03)
+    d.reset(0.35, 0.006, 0.03, cfg.thr.leva_rilascio)
+    d.step(0.006)                                   # porta AL BERSAGLIO
+    check(d.A, "la porta è al bersaglio")
+    f.s.fase = Fase.MOVE
+    # mano nella finestra morta: 0.042 m, oltre la conferma e sotto la perdita
+    for _ in range(60):
+        _passo(f, d, presa_ok=False, dist_mano=0.042, grip_cmd=1.0, soglia=0.75,
+               contatto=True, hold_target=60)
+        if f.s.fase != Fase.MOVE:
+            break
+    check(f.s.fase in (Fase.HOLD, Fase.RELEASE),
+          "§3 al bersaglio si esce da MOVE: con le dita chiuse in HOLD, "
+          "altrimenti in RELEASE dopo T_hold")
+    # HOLD: porta che oscilla dentro/fuori tolleranza
+    cfg, f = _fsm("close")
+    d2 = DoorState(theta_star=0.006, theta_zero=0.35, tol=0.03)
+    d2.reset(0.35, 0.006, 0.03, cfg.thr.leva_rilascio)
+    f.s.fase = Fase.HOLD
+    for i in range(4 * cfg.thr.stall_guard_steps):
+        d2.step(0.006 if i % 2 == 0 else 0.20)      # dentro, fuori, dentro, fuori
+        _passo(f, d2, hold_target=60)
+        if f.s.fase != Fase.HOLD:
+            break
+    check(f.s.fase == Fase.RELEASE,
+          "§3 una porta che oscilla non blocca HOLD: la guardia è cumulativa")
+
+
+def test_da_ogni_stato_si_arriva_a_FINE():
+    """§3 correzione 4 — PROVA ESAUSTIVA: nessuno stato senza uscita.
+
+    Con la porta ferma AL BERSAGLIO si enumerano fase iniziale, comando del
+    gripper, distanza della mano, contatto, angolo della leva e distanza dal
+    punto di ritiro, e si verifica che in 600 passi si arrivi sempre a FINE.
+
+    E' il test che avrebbe intercettato il difetto peggiore rimasto: con il
+    comando dentro la banda d'isteresi (fra soglia − 0.20 e soglia) e la mano
+    entro la tolleranza di perdita, MOVE non poteva ne' entrare in HOLD ne'
+    tornare in REACH. Misurato prima della correzione: **128 combinazioni su
+    576** non terminavano mai, e nella valutazione della chiusura erano 3
+    episodi su 20 a 600 passi con errore −0.0060, cioe' a compito gia' compiuto.
+    """
+    for task, ths, th0, tol in (("close", 0.006, 0.35, 0.03),
+                                ("open", 0.37, 0.0, 0.05)):
+        cfg = UnifiedConfig.per(task); thr = cfg.thr; soglia = 0.70
+        morte = tot = trappole = 0
+        for fase0 in (Fase.REACH, Fase.MOVE, Fase.HOLD, Fase.RELEASE):
+          for grip in (-1.0, 0.0, 0.55, 0.65, 0.80, 1.0):
+            for dist in (0.02, 0.042, 0.06, 0.20):
+              for cont in (True, False):
+                for latch in (0.0, 0.30, 1.4):
+                  for dret in (0.03, 0.30):
+                    tot += 1
+                    f = UnifiedFSM(cfg); f.s.fase = fase0
+                    d = DoorState(ths, th0, tol)
+                    d.reset(th0, ths, tol, thr.leva_rilascio); d.step(ths)
+                    senza_presa = 0
+                    for _ in range(600):
+                        prima = f.s.fase
+                        f.step(door=d,
+                               presa_ok=(dist <= 0.035 and grip >= soglia and cont),
+                               contatto=cont, dist_mano=dist, latch=latch,
+                               hold_target=60, grip_cmd=grip, soglia=soglia,
+                               door_qvel=0.0, dist_ritiro=dret)
+                        if prima != Fase.HOLD and f.s.fase == Fase.HOLD and not cont:
+                            senza_presa += 1
+                        if f.s.fase == Fase.FINE:
+                            break
+                    else:
+                        morte += 1
+                    trappole += senza_presa
+        check(morte == 0, f"§3 {task}: {morte} stati su {tot} non arrivano mai a FINE")
+        check(trappole == 0,
+              f"§3 {task}: {trappole} ingressi in HOLD SENZA dita chiuse. HOLD "
+              f"congela il braccio e paga `hold_grip` −5: entrarci a mano libera "
+              f"e' una trappola da −6.21 per passo per 62 passi, misurata")
+        check(tot == 1152, f"§3 {task}: la prova copre 1152 combinazioni, non {tot}")
 
 
 def test_guardia_di_stallo():
@@ -332,9 +458,9 @@ def test_maschera_applicata():
     check("latch_home" in t, "§8 `latch_home` resta attivo: non è mascherato")
 
 
-# ══ §1 i sedici termini ════════════════════════════════════════════════
-def test_sedici_termini():
-    check(len(TERMINI) == 16, f"§1 devono essere 16 termini, sono {len(TERMINI)}")
+# ══ §1 i diciassette termini ═════════════════════════════════════════════
+def test_diciassette_termini():
+    check(len(TERMINI) == 17, f"§1 devono essere 17 termini, sono {len(TERMINI)}")
     check(set(ASSORBE) == set(TERMINI), "§5 ogni termine ha la sua mappatura")
     # copertura: 40 definizioni della chiusura + 25 dell'apertura, nessuna orfana
     sc = {k for k, v in SOPPRESSI.items() if v[0] == "chiusura"}
@@ -344,8 +470,7 @@ def test_sedici_termini():
     check(len(c) == 40, f"§5 devono essere 40 definizioni della chiusura, sono {len(c)}")
     check(len(o) == 25, f"§5 devono essere 25 definizioni dell'apertura, sono {len(o)}")
     check(len(c | o) == 41, f"§5 unione = 41, è {len(c | o)}")
-    check(set(SOPPRESSI) == {"door_regress", "hold_veldamp"},
-          "§5 due definizioni soppresse, entrambe dichiarate")
+    check(set(SOPPRESSI) == {"door_regress"}, "§5 una sola definizione soppressa")
 
 
 def test_mappatura_contro_i_sorgenti():
@@ -387,7 +512,7 @@ def test_termini_per_fase():
         # (`phase_trans` degli originali), che il §1 fa assorbire da `success`.
         Fase.MOVE:    {"time", "smooth", "phi", "approach", "grip", "progress",
                        "contact", "success"},
-        Fase.HOLD:    {"time", "smooth", "phi", "wrist", "target", "still", "hold_grip"},
+        Fase.HOLD:    {"time", "smooth", "phi", "wrist", "target", "damp", "still", "hold_grip"},
         # `damp` NON c'e': vive solo in HOLD, come nel sorgente della chiusura
         Fase.RELEASE: {"time", "smooth", "phi", "target", "still", "release",
                        "retreat", "latch_home"},
@@ -431,26 +556,42 @@ def test_progress_normalizzato():
           "§7 il budget adottato è quello della chiusura (criterio §9)")
 
 
-def test_damp_soppresso():
-    """§7 — `hold_veldamp` non esiste piu': una porta che si muove non paga.
+def test_meccanismo_di_arresto():
+    """§1 termini 10-11 — rampa, rimbalzo e smorzamento: fermare la porta.
 
-    Il sorgente dell'apertura lo ha respinto per iscritto (al goal la molla
-    ritira la porta in modo inevitabile) e la misura gli da' ragione: −1.53 per
-    passo in HOLD sull'apertura contro −0.05 sulla chiusura, dove e' inattivo
-    perche' il bersaglio e' il punto di equilibrio.
+    Nella chiusura l'arresto lo produce la fisica (il pannello contro il
+    telaio); nell'apertura il bersaglio e' un punto interno e la cerniera non
+    ha molla di richiamo, quindi va scritto nella ricompensa. Tesi §6.4.1,
+    classe F: «sono i due termini che fermano la porta sul bersaglio».
     """
     cfg = UnifiedConfig.per("open")
     f, rw = UnifiedFSM(cfg), UnifiedReward(cfg)
     d = DoorState(theta_star=0.37, theta_zero=0.0, tol=0.05); d.reset(0.0, 0.37, 0.05)
-    d.step(0.37); f.s.fase = Fase.HOLD
-    t = rw.compute(fsm=f, door=d, action=np.zeros(7), delta_p=0.0, dist_mano=0.02,
-                   dist_xy=0.0, dz=0.0, allineamento=1.0, polso_piatto=0.0, grip_cmd=0.9,
-                   soglia_presa=0.7, contatto=True, door_qvel=0.2, latch=0.0,
-                   vel_giunti=0.0, raggio=0.02, dist_ritiro=0.1, dir_ritiro=None,
-                   hold_target=30, terminato=False)
-    check("damp" not in t, "§7 nessun termine penalizza |dθ/dt|")
-    check("damp" not in TERMINI and "hold_veldamp" in SOPPRESSI,
-          "§7 `damp` non e' fra i termini e `hold_veldamp` e' dichiarato soppresso")
+    kw = dict(fsm=f, door=d, action=np.zeros(7), delta_p=0.0, dist_mano=0.02,
+              dist_xy=0.0, dz=0.0, allineamento=1.0, polso_piatto=0.0, grip_cmd=0.9,
+              soglia_presa=0.7, contatto=True, latch=0.0, vel_giunti=0.0, raggio=0.02,
+              dist_ritiro=0.1, dir_ritiro=None, hold_target=30, terminato=False)
+    f.s.fase = Fase.HOLD
+    # 1 — la rampa: piu' si e' precisi, piu' si paga
+    d.step(0.37); centro = rw.compute(door_qvel=0.0, **kw)["target"]
+    rw.reset(); d.step(0.34); bordo = rw.compute(door_qvel=0.0, **kw)["target"]
+    check(centro > bordo > 0.0, "§1.10 dentro la tolleranza la rampa indica il CENTRO")
+    # 2 — il rimbalzo: fuori tolleranza si paga, e cresce con l'errore
+    rw.reset(); d.step(0.45); fuori = rw.compute(door_qvel=0.0, **kw)["target"]
+    rw.reset(); d.step(0.50); piu_fuori = rw.compute(door_qvel=0.0, **kw)["target"]
+    check(fuori < 0.0 and piu_fuori < fuori, "§1.10 fuori tolleranza `target` PUNISCE")
+    # 3 — lo smorzamento: solo in HOLD, e zero all'ottimo
+    rw.reset(); d.step(0.37)
+    fermo = rw.compute(door_qvel=0.0, **kw)
+    check("damp" not in fermo, "§1.11 a porta ferma `damp` non interviene")
+    rw.reset(); moto = rw.compute(door_qvel=0.2, **kw)
+    check(moto["damp"] < 0.0, "§1.11 la porta in movimento sul bersaglio e' penalizzata")
+    rw.reset(); f.s.fase = Fase.RELEASE
+    check("damp" not in rw.compute(door_qvel=0.2, **kw), "§1.11 `damp` vive solo in HOLD")
+    # in RELEASE, fuori tolleranza, `target` non punisce: e' `hold` del ramo RETREAT
+    rw.reset(); d.step(0.45)
+    check("target" not in rw.compute(door_qvel=0.0, **kw),
+          "§1.10 in RELEASE fuori tolleranza `target` vale zero, non punisce")
 
 
 def test_formule_fedeli_al_documento():
@@ -789,6 +930,109 @@ def test_controllori_di_fase():
 
 def test_soglia_A_cinque_usi():
     check(len(USI_DI_A) == 5, f"§4 A è usata in cinque punti, dichiarati {len(USI_DI_A)}")
+
+
+def test_soglia_di_sblocco_contro_il_simulatore():
+    """§7 — la costante `leva_rilascio` verificata sulla FISICA, non sulla carta.
+
+    E' il controllo che avrebbe intercettato la regressione peggiore di questo
+    progetto: con `leva_rilascio` = 0 sulla chiusura la porta si fermava a
+    0.182 rad in 15 episodi su 20 di valutazione, perche' il chiavistello
+    aggancia il montante e la macchina non pagava il gesto che lo libera.
+
+    Si applica coppia alla cerniera con la leva TENUTA a un angolo fissato e si
+    guarda dove la porta si ferma. Il test e' lento (costruisce il simulatore),
+    ma e' l'unico che lega un numero della configurazione a una misura fisica.
+    """
+    import os
+    os.environ.setdefault("MUJOCO_GL", "disabled")
+    from env_unified import UnifiedDoorEnv
+    cfg = UnifiedConfig.per("close")
+    env = UnifiedDoorEnv(cfg)
+    rs = env._rs; sim = rs.sim
+    hin, lat = rs.hinge_qpos_addr, rs.handle_qpos_addr
+    dof = int(sim.model.jnt_dofadr[sim.model.jnt_qposadr.tolist().index(hin)])
+
+    def theta_finale(theta0, leva, coppia, passi=250):
+        sim.data.qpos[:] = 0.0; sim.data.qvel[:] = 0.0
+        sim.data.qpos[hin] = theta0; sim.data.qpos[lat] = leva
+        sim.forward()
+        for _ in range(passi):
+            sim.data.qpos[lat] = leva          # leva tenuta ferma
+            sim.data.qvel[lat] = 0.0
+            sim.data.qfrc_applied[dof] = coppia
+            sim.step()
+        sim.data.qfrc_applied[:] = 0.0
+        return float(sim.data.qpos[hin])
+
+    L = cfg.thr.leva_rilascio
+    # 1 — a leva ferma il chiavistello blocca la porta in ENTRAMBI i versi
+    check(theta_finale(0.36, 0.0, -2.0) > 0.15,
+          "§7 a leva ferma la chiusura si blocca (montante del chiavistello)")
+    check(theta_finale(0.0, 0.0, +2.0) < 0.05,
+          "§7 a leva ferma l'apertura si blocca (stesso montante)")
+    # 2 — oltre la soglia dichiarata la corsa e' libera, in entrambi i versi
+    check(theta_finale(0.36, -L, -2.0) < 0.03,
+          f"§7 con |leva| = {L} la chiusura arriva al bersaglio")
+    check(theta_finale(0.0, -L, +2.0) > 0.30,
+          f"§7 con |leva| = {L} l'apertura arriva al bersaglio")
+    # 3 — la soglia non e' sovrastimata: appena sotto, la porta e' ancora bloccata
+    check(theta_finale(0.36, -(L - 0.15), -2.0) > 0.10,
+          "§7 appena sotto la soglia la chiusura e' ancora bloccata")
+    env.close()
+
+
+def test_budget_e_modello_migliore():
+    """§9 — budget 1.5·10⁶ e salvataggio dell'ISTANTANEA MIGLIORE.
+
+    Il progetto dell'apertura dichiara 1 500 000 passi e salva il migliore a
+    650 000: il finale e' peggiore. Salvare solo l'ultimo butta via il picco.
+    """
+    import inspect
+    import train_unified as T
+    src = inspect.getsource(T)
+    for a in ("--task", "--total-steps", "--eval-ogni", "--eval-episodi"):
+        check(a in src, f"§9 l'opzione {a} esiste")
+    check("default=1_500_000" in src, "§9 il budget predefinito è 1.5·10⁶")
+    check("_crea_callback_migliore" in src, "§9 esiste il callback dell'istantanea migliore")
+    check('save(os.path.join(args.run_dir, "best_model"))' in src
+          and 'save(os.path.join(args.run_dir, "final_model"))' in src,
+          "§9 si salvano DUE file: la migliore e la finale")
+    check("sync_envs_normalization" in src,
+          "§9 la statistica di VecNormalize è sincronizzata con l'ambiente di valutazione")
+    check('env_addestramento.save(os.path.join(args.run_dir, "vecnormalize.pkl"))' in src,
+          "§9 la normalizzazione è salvata INSIEME al modello migliore")
+
+
+def test_tre_livelli_di_successo():
+    """§9 — i tre livelli della tesi (§6.3.4), non uno solo.
+
+    permissivo  la politica ha raggiunto la fase di mantenimento
+    true        a fine episodio la porta e' al bersaglio E la leva e' a riposo
+    clean       in piu', il ritiro e' stato effettivamente completato
+
+    `is_success` DEVE essere il true success: e' la metrica con cui la baseline
+    si misura (apertura 83.0 %, chiusura 100 %). Fermarsi a `terminato ∧ A`
+    sarebbe piu' permissivo — non guarderebbe la leva — e i numeri non sarebbero
+    confrontabili con quelli della tesi.
+    """
+    import inspect
+    import env_unified, train_unified
+    src = inspect.getsource(env_unified.UnifiedDoorEnv.step)
+    check("successo_permissivo" in src and "successo_pulito" in src,
+          "§9 l'ambiente pubblica tutti e tre i livelli")
+    check("abs(m[\"latch\"]) <= self.cfg.thr.latch_term_tol" in src,
+          "§9 il true success richiede la leva tornata a riposo")
+    check("dist_ritiro\"] <= self.cfg.thr.retreat_settle_dist" in src,
+          "§9 il clean success richiede il ritiro completato")
+    m = inspect.getsource(train_unified.metriche)
+    for k in ("successo_permissivo", "success_rate", "successo_pulito"):
+        check(k in m, f"§9 le metriche riportano {k}")
+    # ordinamento logico: clean ⊆ true ⊆ permissivo
+    for perm, true_, clean in ((True, True, True), (True, True, False),
+                               (True, False, False), (False, False, False)):
+        check(not clean or true_, "§9 clean implica true")
+        check(not true_ or perm, "§9 true implica permissivo")
 
 
 def test_osservazione_126():

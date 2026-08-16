@@ -32,7 +32,8 @@ class DoorState:
 
     theta: float = 0.0         # θ   angolo corrente
     leva: float = 0.0          # angolo corrente della leva
-    leva_rilascio: float = 0.0 # |leva| che libera il chiavistello, 0 = nessun blocco
+    leva_rilascio: float = 0.0 # |leva| che libera il chiavistello (§7)
+    quota_leva: float = 0.30   # §7 quota del budget `progress` che spetta alla leva
     _p: float = 0.0            # riferimento del cricchetto
     _ancorato: bool = False    # il riferimento e' stato posato (ingresso in MOVE)
 
@@ -70,14 +71,39 @@ class DoorState:
         quel pezzo di compito.
         Vale |θ* − θ₀| da sola quando `leva_rilascio` e' 0 (chiusura).
         """
-        return abs(self.theta_star - self.theta_zero) + self.leva_rilascio
+        return abs(self.theta_star - self.theta_zero) + self._leva_equivalente
 
     @property
     def _lavoro(self) -> float:
         """Radianti di corsa gia' coperti, leva + cerniera, senza cricchetto."""
-        return (min(abs(self.leva), self.leva_rilascio)
-                + float(np.clip(self.sigma * (self.theta - self.theta_zero),
-                                0.0, abs(self.theta_star - self.theta_zero))))
+        corsa = abs(self.theta_star - self.theta_zero)
+        k = (self._leva_equivalente / self.leva_rilascio) if self.leva_rilascio > 1e-9 else 0.0
+        return (k * min(abs(self.leva), self.leva_rilascio)
+                + float(np.clip(self.sigma * (self.theta - self.theta_zero), 0.0, corsa)))
+
+    @property
+    def _leva_equivalente(self) -> float:
+        """§7 — QUANTI radianti-equivalenti di budget vale girare la leva.
+
+        E' il numero che decide da solo quale dei due compiti si risolve, e per
+        questo va scritto una volta sola invece di lasciarlo cadere dalla
+        geometria. Con `escursione = |θ*−θ₀| + leva_rilascio` la leva (1.23 rad)
+        si prende l'80 % del budget e alla cerniera resta il 20 %: il gradiente
+        sull'angolo della porta scende a 700/1.53 = 458 per radiante e
+        l'APERTURA — dove la cerniera E' il compito — non ha piu' segnale.
+        Togliendo del tutto la leva il gradiente sale a 700/0.30 = 2333 e
+        l'apertura riparte, ma la CHIUSURA perde ogni motivo per sbloccare il
+        chiavistello e si pianta contro il catenaccio: misurato, 18 valutazioni
+        su 20 ferme a errore +0.1755, sempre lo stesso valore.
+
+        I due tratti non devono quindi dividersi UN budget: devono averne uno
+        ciascuno. `quota_leva` fissa la parte che spetta alla leva, e la leva
+        viene riscalata perche' valga esattamente quella frazione della corsa
+        della cerniera. La leva e' un MEZZO, la cerniera e' il fine: la quota e'
+        minore di 1/2. Vale per i due compiti con la stessa formula.
+        """
+        q = float(self.quota_leva)
+        return abs(self.theta_star - self.theta_zero) * q / max(1.0 - q, 1e-6)
 
     @property
     def avanzamento(self) -> float:
@@ -112,11 +138,12 @@ class DoorState:
 
     # ── aggiornamento ------------------------------------------------------
     def reset(self, theta_zero: float, theta_star: float, tol: float,
-              leva_rilascio: float = 0.0) -> None:
+              leva_rilascio: float = 0.0, quota_leva: float = 0.30) -> None:
         self.theta_zero = float(theta_zero)
         self.theta_star = float(theta_star)
         self.tol = float(tol)
         self.leva_rilascio = float(leva_rilascio)
+        self.quota_leva = float(quota_leva)
         self.theta = float(theta_zero)
         self.leva = 0.0
         self._p = 0.0

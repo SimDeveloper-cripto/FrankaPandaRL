@@ -4,7 +4,7 @@
 fsm_unified.py — la macchina a stati, quattro fasi.
 
 Documento di riferimento: tabella_reward_machine_unificata.md
-  §3  «Le quattro fasi» + le tre correzioni alle transizioni
+  §3  «Le quattro fasi» + le quattro correzioni alle transizioni
   §8  «I due controllori» — dichiarati come stati mascherati
   §6    struttura a quattro fasi e soglie adattive: INVARIATE
 
@@ -63,7 +63,8 @@ class StatoFSM:
     passi_presa: int = 0          # conferma della presa (REACH -> MOVE)
     passi_persa: int = 0          # perdita della presa  (MOVE -> REACH)
     timer_hold: int = 0           # sale se A, scende se non A
-    passi_cala: int = 0           # guardia di stallo in HOLD: decrementi consecutivi
+    passi_cala: int = 0           # guardia di stallo in HOLD: frame fuori tolleranza
+    passi_a_bersaglio: int = 0    # frame consecutivi con A vera prima di HOLD
     passi_release: int = 0
 
     prev_fase: Fase = Fase.REACH
@@ -78,21 +79,43 @@ class StatoFSM:
 
 class UnifiedFSM:
     """§3 — quattro fasi. Le condizioni di transizione sono le stesse dei due
-    progetti, con TRE correzioni dichiarate nel documento:
+    progetti, con QUATTRO correzioni dichiarate nel documento:
 
       1. MOVE -> HOLD diventa BILATERALE.
          Oggi la chiusura chiede θ ≤ soglia e l'apertura θ ≥ goal − tol. La prima
          è di fatto bilaterale perché la porta non può andare sotto zero; la
          seconda no, e lascia passare qualsiasi sovra-apertura. Qui la condizione
          è `A`, cioè |e| ≤ tol, uguale per i due compiti.
+         Il secondo membro del gate e' il COMANDO del gripper sopra la soglia
+         adattiva, esattamente come nei due sorgenti (`gripper_action > 0.80`
+         nella chiusura, `> g_thresh` nell'apertura dopo la correzione §1.30).
+         NON la vicinanza: chiedendo anche quella si apre una finestra morta fra
+         0.035 e 0.05 m in cui la mano e' troppo lontana per confermare la presa
+         e troppo vicina per perderla, e con la porta gia' al bersaglio l'episodio
+         non esce piu' da MOVE. Misurato: 1 valutazione su 20 nella chiusura e
+         3 su 20 nell'apertura finivano a 600 passi con la porta ESATTAMENTE al
+         bersaglio (errore −0.0060 e −0.0155) e nessuna terminazione.
 
       2. Si aggiunge una GUARDIA DI STALLO in HOLD.
          Con il gate bilaterale un episodio che supera il bersaglio vedrebbe il
          timer scendere senza mai risalire, restando bloccato fino all'orizzonte;
-         la guardia forza l'uscita dopo N decrementi consecutivi.
+         la guardia forza l'uscita dopo N frame fuori tolleranza. Il conteggio
+         e' CUMULATIVO, non consecutivo: azzerandolo a ogni frame dentro
+         tolleranza una porta che oscilla dentro/fuori terrebbe il timer a zero
+         e la guardia a zero insieme, e HOLD non finirebbe mai. Cosi' invece
+         l'uscita e' garantita: o il timer arriva a T_hold, o la guardia arriva
+         a N.
 
       3. L'ISTERESI della presa, ripresa dal sorgente della chiusura: vedi
          `presa_persa`.
+
+      4. LA PORTA E' IL COMPITO. Se `A` regge per T_hold frame consecutivi
+         senza essere passati da HOLD si va in RELEASE: la porta e' stata tenuta
+         al bersaglio per il tempo richiesto, comunque fosse messa la mano.
+         Senza questa regola la macchina ha stati da cui FINE e' IRRAGGIUNGIBILE
+         (128 combinazioni su 576 con la porta ferma al bersaglio); mandando
+         invece in HOLD si crea una trappola, perche' HOLD presuppone la presa.
+         Vedi la nota estesa dentro `step`.
 
       La stessa guardia era stata provata anche in MOVE ed e' stata TOLTA: la
       misura (chiusura, 600k passi) mostra che produce solo un ping-pong
@@ -164,6 +187,30 @@ class UnifiedFSM:
         s = self.s
         s.prev_fase = s.fase
 
+        # (4) LA PORTA E' IL COMPITO: se `A` regge per T_hold frame consecutivi
+        # senza che si sia mai entrati in HOLD, la porta E' STATA TENUTA al
+        # bersaglio per il tempo richiesto — con o senza la mano sopra — e si
+        # passa a RELEASE. Serve a togliere gli stati da cui FINE e'
+        # IRRAGGIUNGIBILE (misurato: 128 combinazioni su 576 con la porta ferma
+        # al bersaglio).
+        #
+        # Perche' RELEASE e non HOLD. HOLD presuppone la presa: congela il
+        # braccio e paga `hold_grip`, che senza dita chiuse vale −5. Mandandoci
+        # l'agente a mano libera si crea una TRAPPOLA da cui non puo' uscire:
+        # misurato, −6.21 per passo per 62 passi, cioe' −385 per episodio, e
+        # l'addestramento impara la lezione sbagliata — «chiudere la porta senza
+        # una presa salda e' una catastrofe» — con REACH all'87 % dei passi e
+        # `progress` sceso da +26 a +7.5. RELEASE invece non presuppone niente:
+        # paga l'apertura della mano e l'allontanamento, e termina comunque.
+        #
+        # Non e' una scorciatoia: costa gli stessi T_hold frame della via
+        # normale, ma li spende in REACH o MOVE, dove il bilancio e' negativo
+        # (−1.45 e −0.50 per passo) invece che positivo (+0.24 in HOLD).
+        if s.fase in (Fase.REACH, Fase.MOVE):
+            s.passi_a_bersaglio = s.passi_a_bersaglio + 1 if door.A else 0
+            if s.passi_a_bersaglio >= hold_target:
+                s.fase, s.passi_release = Fase.RELEASE, 0
+
         if s.fase == Fase.REACH:
             s.passi_presa = s.passi_presa + 1 if presa_ok else 0
             if s.passi_presa >= self.thr.grasp_confirm_steps:
@@ -172,15 +219,17 @@ class UnifiedFSM:
         elif s.fase == Fase.MOVE:
             persa = self.presa_persa(door, contatto, dist_mano, grip_cmd, soglia, door_qvel)
             s.passi_persa = s.passi_persa + 1 if persa else 0
-            if s.passi_persa >= self.thr.grasp_lose_steps:
-                s.fase, s.passi_persa = Fase.REACH, 0          # ritorno di fase
-            elif door.A and presa_ok:                          # (1) BILATERALE
+            # (1) BILATERALE. Il secondo membro e' il comando del gripper sopra
+            # la soglia adattiva, come nei sorgenti, PIU' le dita fisicamente
+            # chiuse: e' cio' che rende `hold_grip` una misura sensata in HOLD.
+            if door.A and grip_cmd >= soglia and contatto:
                 s.fase, s.timer_hold, s.passi_cala = Fase.HOLD, 0, 0
+            elif s.passi_persa >= self.thr.grasp_lose_steps:
+                s.fase, s.passi_persa = Fase.REACH, 0          # ritorno di fase
 
         elif s.fase == Fase.HOLD:
             if door.A:
                 s.timer_hold += 1
-                s.passi_cala = 0
             else:
                 s.timer_hold = max(0, s.timer_hold - 1)
                 s.passi_cala += 1

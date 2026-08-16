@@ -111,6 +111,9 @@ class UnifiedDoorEnv(gym.Env):
         self._obs_keys = None
         self._passi = 0
         self._contatto_prec = False
+        self._larghezza = 0.0
+        self._latch = 0.0
+        self._passi_riporto = 0
         self._retreat_pos: Optional[np.ndarray] = None
         self._eef = np.zeros(3)
         self._handle = np.zeros(3)
@@ -157,9 +160,10 @@ class UnifiedDoorEnv(gym.Env):
         self._rs.sim.data.qpos[self._rs.hinge_qpos_addr] = theta_zero
         self._rs.sim.forward()
         theta_star = self.cfg.task.campiona_bersaglio(self.corsa_min, self.corsa_max, np.random)
-        self.door.reset(theta_zero=theta_zero, theta_star=theta_star,
+        self.door.reset(quota_leva=self.cfg.thr.quota_leva,
+                        theta_zero=theta_zero, theta_star=theta_star,
                         tol=self.cfg.task.tol,
-                        leva_rilascio=self.cfg.task.leva_rilascio)
+                        leva_rilascio=self.cfg.thr.leva_rilascio)
 
         self.fsm.reset()
         self.reward.reset()
@@ -224,8 +228,23 @@ class UnifiedDoorEnv(gym.Env):
             "controllore": int(self.fsm.s.controllore),
             "mascherati": sorted(self.fsm.termini_mascherati()),
             "door_error": self.door.e, "A": bool(self.door.A),
+            "latch_finale": float(m["latch"]),
             "theta_star": self.door.theta_star, "progress": self.door.p,
-            "is_success": bool(terminated and self.door.A),
+            # §9 — I TRE LIVELLI DI SUCCESSO della tesi (§6.3.4), non uno solo:
+            #   permissivo  la politica ha raggiunto la fase di mantenimento
+            #   true        a fine episodio la porta e' al bersaglio E la leva
+            #               e' tornata a riposo
+            #   clean       in piu', il ritiro e' stato effettivamente completato
+            # `is_success` e' il TRUE SUCCESS, perche' e' quello con cui la
+            # baseline si misura (apertura 83.0 %, chiusura 100 %). Fermarsi a
+            # `terminato ∧ A` sarebbe piu' permissivo — non guarderebbe la leva —
+            # e i numeri non sarebbero confrontabili con quelli della tesi.
+            "successo_permissivo": bool(self.fsm.s.fase >= Fase.HOLD),
+            "is_success": bool(terminated and self.door.A
+                               and abs(m["latch"]) <= self.cfg.thr.latch_term_tol),
+            "successo_pulito": bool(terminated and self.door.A
+                                    and abs(m["latch"]) <= self.cfg.thr.latch_term_tol
+                                    and m["dist_ritiro"] <= self.cfg.thr.retreat_settle_dist),
         }
         return self._osserva(obs), reward, terminated, truncated, info
 
@@ -259,10 +278,20 @@ class UnifiedDoorEnv(gym.Env):
         soglia = self.fsm.soglia_presa(self._rand.current_handle_friction)
         raggio = self._rand.current_handle_radius
         vicino = d3 <= self.fsm.soglia_distanza(raggio)
-        # contatto FISICO, non dedotto dal comando: larghezza reale delle dita
-        # confrontata col diametro della maniglia (close_generalized_v2 §1.17)
+        # Contatto FISICO: SOLO la larghezza reale delle dita confrontata col
+        # diametro della maniglia, esattamente come `is_physically_closed` nei
+        # due sorgenti. NON deve dipendere dalla vicinanza: `vicino` entra
+        # separatamente in `presa_ok`, dove serve a CONFERMARE la presa.
+        # Mettendolo dentro `contatto` si rompono tre cose insieme — la morsa
+        # sul gripper si sgancia appena la mano si scosta di 3.5 cm, il comando
+        # grezzo (basso) torna a passare, e la presa risulta persa: misurato
+        # sulla traiettoria che risolve l'apertura, la mano supera i 3.5 cm
+        # nell'11 % dei passi di MOVE mentre gira la leva, e il comando grezzo
+        # sta sotto soglia−0.20 nel 94 %.
         larghezza = float(np.sum(np.abs(np.asarray(obs["robot0_gripper_qpos"]))))
-        contatto = vicino and (0.015 <= larghezza <= 2.0 * raggio + 0.025)
+        self._larghezza = larghezza
+        self._latch = latch
+        contatto = bool(0.015 <= larghezza <= 2.0 * raggio + 0.025)
         # Condizione di presa: le TRE condizioni degli originali (fsm_v2.py,
         # ramo PHASE_REACH). Senza `contatto` — la chiusura FISICA delle dita —
         # l'agente puo' comandare il gripper chiuso a vuoto, farsi confermare la
@@ -396,12 +425,9 @@ class UnifiedDoorEnv(gym.Env):
         # fasi non chiudono.
         #
         # BLOCCO DEL BRACCIO IN HOLD (close env_v2 riga 175, open riga 451).
-        # In HOLD il compito e' tenere ferma la porta al bersaglio. Se il
-        # braccio continua a essere comandato dalla policy, la porta oscilla e
-        # `damp` (peso 25) la punisce: misurato −6…−12 per passo, con HOLD a
-        # −14…−21 complessivi. HOLD diventa una trappola e l'agente impara a
-        # non entrarci. Con il braccio bloccato la porta si ferma, `damp` va a
-        # zero e `still` paga il suo +1, esattamente come negli originali.
+        # In HOLD il compito e' tenere ferma la porta al bersaglio: se il
+        # braccio resta comandato dalla policy la porta oscilla, `still` non
+        # paga e HOLD diventa una fase in cui non conviene entrare.
         if self.fsm.s.fase == Fase.HOLD:
             a[:-1] = 0.0
 
@@ -414,12 +440,38 @@ class UnifiedDoorEnv(gym.Env):
             a[-1] = max(float(a[-1]), min(1.0, soglia + self.cfg.thr.grip_lock_margin))
 
         c = self.fsm.s.controllore
+        if c != Controllore.C0_RIPORTO_LEVA:
+            self._passi_riporto = 0          # la rampa riparte a ogni riporto
         if c == Controllore.NESSUNO:
             return np.clip(a, -1.0, 1.0)
         if c == Controllore.C0_RIPORTO_LEVA:
             # il braccio accompagna la leva lungo il suo arco, presa ancora chiusa
-            a[:3] = np.clip(self._direzione_leva() * 0.5, -1.0, 1.0)
-            a[-1] = +1.0
+            # §8 C0 — RIPORTO DELLA LEVA, nella forma del sorgente
+            # (open env_v2, rami §1.46-§1.51). Tre pezzi, tutti misurati li':
+            #   · ampiezza proporzionale a |leva|, con tetto 0.6 e RAMPA sui
+            #     primi passi: senza, l'ingresso in RELEASE da' uno strappo
+            #     alla porta, perche' la presa e' ancora chiusa e accoppiata
+            #     al cardine;
+            #   · ROTAZIONE DEL POLSO coerente con il moto rigido attorno
+            #     all'asse della leva: azzerarla impone all'OSC di tenere
+            #     l'orientazione rigida mentre la traslazione segue l'arco, un
+            #     vincolo contraddittorio che pianta il braccio;
+            #   · GABBIA invece della morsa: bang-bang sulla larghezza REALE
+            #     delle dita attorno a diametro + margine. A presa chiusa la
+            #     barra deve RUOTARE dentro la pinza, e su una maniglia grossa
+            #     la coppia d'attrito della morsa vince la spinta: il riporto
+            #     rallenta di 30 volte e si pianta, con la porta che rimbalza
+            #     di ±0.13 rad. Nella gabbia la barra ruota libera e il dito
+            #     l'accompagna.
+            verso, omega = self._direzione_leva()
+            self._passi_riporto += 1
+            rampa = min(1.0, self._passi_riporto / self.cfg.thr.riporto_rampa)
+            mag = min(self.cfg.thr.riporto_mag_max,
+                      self.cfg.thr.riporto_guadagno * abs(self._latch)) * rampa
+            a[:3] = np.clip(verso * mag, -1.0, 1.0)
+            a[3:6] = np.clip(omega * (self.cfg.thr.riporto_rot_gain * mag), -1.0, 1.0)
+            largo_tgt = 2.0 * self._rand.current_handle_radius + self.cfg.thr.gabbia_margine
+            a[-1] = 1.0 if self._larghezza > largo_tgt else -1.0
         elif c == Controllore.C1_ESCAPE:
             # l'ambiente comanda il braccio verso il punto di ritiro
             if self._retreat_pos is not None:
@@ -440,7 +492,7 @@ class UnifiedDoorEnv(gym.Env):
         x, y, z, w = np.asarray(q, dtype=np.float64)     # robosuite: xyzw
         return float(abs(2.0 * (x * z - w * y)))          # terza riga, prima colonna
 
-    def _direzione_leva(self) -> np.ndarray:
+    def _direzione_leva(self):
         """§8 C0 — tangente all'arco della leva nel punto afferrato.
 
         Non è una stima geometrica: asse e ancora del giunto sono letti dal
@@ -452,14 +504,19 @@ class UnifiedDoorEnv(gym.Env):
         try:
             jid = getattr(self._rand, "latch_joint_id", None)
             if jid is None:
-                return np.zeros(3)
+                return np.zeros(3), np.zeros(3)
             sim = self._rs.sim
             asse = np.asarray(sim.data.xaxis[jid], dtype=np.float64)
             ancora = np.asarray(sim.data.xanchor[jid], dtype=np.float64)
             v = -np.cross(asse, self._eef - ancora)
+            segno = -1.0
             if float(sim.data.qpos[self._rs.handle_qpos_addr]) < 0.0:
-                v = -v                          # leva oltre lo zero: verso opposto
+                v, segno = -v, +1.0             # leva oltre lo zero: verso opposto
             n = float(np.linalg.norm(v))
-            return v / n if n > 1e-8 else np.zeros(3)
+            if n < 1e-8:
+                return np.zeros(3), np.zeros(3)
+            # il riporto e' un moto RIGIDO attorno all'asse: serve la tangente
+            # per la traslazione e l'asse firmato per la rotazione del polso
+            return v / n, segno * asse
         except Exception:
-            return np.zeros(3)
+            return np.zeros(3), np.zeros(3)

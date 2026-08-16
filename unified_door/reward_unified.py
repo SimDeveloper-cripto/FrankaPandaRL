@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-reward_unified.py — i 16 termini della reward machine unificata.
+reward_unified.py — i 17 termini della reward machine unificata.
 
 Documento di riferimento: tabella_reward_machine_unificata.md
-  §1  la tabella dei 16 termini e la nota «perché ogni termine è fatto così»
-  §7    i due termini che cambiano: target, progress
+  §1  la tabella dei 17 termini e la nota «perché ogni termine è fatto così»
+  §7    il budget di progresso e l'ancoraggio del cricchetto
   §8  la maschera dei controllori
   §5  ret_lat e ret_down non vanno replicati
 
-I 16 termini assorbono le definizioni dei due sorgenti. Ne spariscono due:
-`door_regress` e `hold_veldamp` — vedi SOPPRESSI.
+I 17 termini assorbono le 41 definizioni dei due sorgenti. Ne sparisce una
+sola: `door_regress` — vedi SOPPRESSI.
 
 Letteratura, invariata rispetto ai due progetti (§6):
   [Ng, Russell & Harada 1999]   shaping potenziale: F = γΦ(s′) − Φ(s)
@@ -31,7 +31,7 @@ from fsm_unified import Fase
 
 # elenco canonico: l'ordine è quello della tabella §1 del documento
 TERMINI = ("time", "smooth", "phi", "approach", "approach_geom", "wrist", "grip",
-           "progress", "contact", "target", "still", "hold_grip",
+           "progress", "contact", "target", "damp", "still", "hold_grip",
            "release", "retreat", "latch_home", "success")
 
 # mappa termine unificato -> definizioni originali assorbite (§5 del documento)
@@ -46,6 +46,7 @@ ASSORBE = {
     "progress":      (["door_prog"], ["door_prog"]),
     "contact":       (["grip_contact", "lift_pen"], ["grip_contact"]),
     "target":        (["hold", "hold_bounce"], ["hold"]),
+    "damp":          (["hold_veldamp"], []),
     "still":         (["hold_act", "hold_jnt_freeze", "ret_freeze", "ret_jnt_prog"],
                       ["hold_act", "ret_freeze"]),
     "hold_grip":     (["hold_grip", "hold_slip", "hold_drop_pen", "hold_dist"],
@@ -59,14 +60,9 @@ ASSORBE = {
 # definizione soppressa -> (sorgente in cui esiste, perche' sparisce)
 SOPPRESSI = {
     "door_regress": ("apertura",
-                     "ridondante: se la porta si allontana dal bersaglio `target` cala "
-                     "gia' da solo"),
-    "hold_veldamp": ("chiusura",
-                     "il sorgente dell'apertura lo ha respinto per iscritto: al suo goal "
-                     "la molla ritira la porta di 0.024-0.050 rad in modo inevitabile, "
-                     "quindi punire |dθ/dt| punisce la fisica. Misurato: -1.53 per passo "
-                     "in HOLD sull'apertura, -0.05 sulla chiusura, dove e' inattivo "
-                     "perche' il bersaglio e' il punto di equilibrio"),
+                     "una porta che si allontana dal bersaglio e' gia' penalizzata dal "
+                     "calo del mantenimento e dallo smorzamento della velocita' "
+                     "(tesi §6.4.1)"),
 }
 
 
@@ -287,12 +283,37 @@ class UnifiedReward:
             r["contact"] = w.contact * door.avanzamento
 
         # ── 10 target — HOLD, RELEASE ───────────────────────────────────
-        # §1 IL TERMINE CHE CAMBIA TUTTO: una rampa al posto di un premio
-        # piatto. Sostituisce sia `1 − |θ|` (chiusura) sia `1` (apertura), e il
-        # ramo negativo di hold_bounce diventa superfluo perché è lo stesso
-        # termine che scende a zero.
+        # IL TERMINE DI MANTENIMENTO, ed e' UNO SOLO. Assorbe `hold` e
+        # `hold_bounce` dei sorgenti nei suoi due rami:
+        #   dentro tolleranza -> RAMPA  clip(1 − |e|/tol, 0, 1)
+        #   fuori, in HOLD    -> ramo negativo di `hold_bounce`, −20·|e|
+        #   fuori, in RELEASE -> zero, come `hold` nel ramo RETREAT del sorgente
+        # La rampa e' il punto (c) di «Dove intervenire, nel codice» (tesi
+        # §6.3.4.2): dentro la tolleranza la ricompensa era PIATTA, quindi non
+        # esisteva un gradiente che indicasse il centro del bersaglio invece del
+        # bordo. Nella chiusura la semplificazione a 1 era ininnocua perche' il
+        # bersaglio e' un fine corsa meccanico; nell'apertura, dove il bersaglio
+        # e' un punto interno che la porta puo' oltrepassare, toglie il segnale.
         if fase in (Fase.HOLD, Fase.RELEASE):
-            r["target"] = w.target * door.target_ramp
+            if door.A:
+                r["target"] = w.target * door.target_ramp
+            elif fase == Fase.HOLD:
+                r["target"] = -w.target_bounce * abs(door.e)
+
+        # ── 11 damp — solo HOLD ─────────────────────────────────────────
+        # `hold_veldamp` della chiusura, che nel sorgente vive DENTRO il ramo
+        # PHASE_HOLD e in nessun altro. Insieme al ramo negativo di `target` e'
+        # il MECCANISMO DI ARRESTO che la tesi (§6.4.1, classe F) prescrive di
+        # portare anche sull'apertura: «sono i due termini che fermano la porta
+        # sul bersaglio». Nella chiusura l'arresto lo produce la fisica — il
+        # pannello si appoggia al telaio — nell'apertura no, perche' il
+        # bersaglio e' un punto interno e la cerniera NON ha molla di richiamo
+        # (rigidita' misurata 0.000, deriva a riposo 1.4·10⁻⁹ rad): la porta
+        # resta dove viene lasciata, quindi l'arresto va scritto nella
+        # ricompensa. All'ottimo vale zero in entrambi i compiti, quindi non
+        # sposta l'ottimo.
+        if fase == Fase.HOLD and abs(door_qvel) > w.damp_floor:
+            r["damp"] = -w.damp * abs(door_qvel)
 
         # ── 12 still — HOLD, RELEASE ────────────────────────────────────
         # ATTENZIONE alla differenza fra le due fasi, che NON e' simmetrica:

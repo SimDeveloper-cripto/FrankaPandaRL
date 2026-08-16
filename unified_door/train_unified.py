@@ -1,50 +1,26 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-train_unified.py — addestramento, play e valutazione. Un file per i due compiti.
 
-Documento di riferimento: tabella_reward_machine_unificata.md §7 «Come si
-verifica che funzioni». L'esperimento è A/B a UNA variabile: cambia solo
-`--task`, tutto il resto è identico.
-
-    export PROGETTI_ORIGINALI=/percorso/che/contiene/close_generalized_v2
-
-    # addestramento
-    python3 train_unified.py --task close --total-steps 1000000
-    python3 train_unified.py --task open  --total-steps 1000000
-
-    # play: guarda il robot (su macOS serve mjpython)
-    mjpython train_unified.py --task open --play
-
-    # valutazione: i due numeri del §7, da riportare INSIEME
-    python3 train_unified.py --task close --eval --episodes 20
-
-§7, avvertenza: il gate bilaterale e la guardia di stallo sono introdotti
-INSIEME e non hanno un interruttore separato — è deliberato, perché il primo
-senza la seconda peggiora la situazione.
-"""
-import argparse
 import os
 import time
-
+import argparse
 import numpy as np
 
 from config_unified import UnifiedConfig
 
-
-def crea_env(cfg, render_mode=None, seed=None):
+def crea_env(cfg, render_mode = None, seed = None):
     from env_unified import UnifiedDoorEnv
     env = UnifiedDoorEnv(cfg, render_mode=render_mode)
     if seed is not None:
-        np.random.seed(seed)          # semina anche la randomizzazione di dominio
+        np.random.seed(seed)
     return env
 
 
 def crea_vecenv(cfg, n_envs, seed):
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
     from stable_baselines3.common.monitor import Monitor
+
     venv = DummyVecEnv([(lambda i=i: Monitor(crea_env(cfg, seed=seed + i))) for i in range(n_envs)])
-    return VecNormalize(venv, norm_obs=True, norm_reward=False, clip_obs=10.0)
+    return VecNormalize(venv, norm_obs = True, norm_reward = False, clip_obs = 10.0)
 
 
 def crea_modello(cfg, env, tb=None):
@@ -142,6 +118,51 @@ def _crea_callback_diario(ogni):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+def _crea_callback_migliore(cfg, args, env_addestramento):
+    """Salva l'ISTANTANEA MIGLIORE, non l'ultima.
+
+    I due progetti originali consegnano due file — il modello finale e quello
+    con la valutazione piu' alta — e per l'apertura il migliore e' a 650 000
+    passi su un budget di 1 500 000, cioe' il finale e' PEGGIORE. Salvare solo
+    l'ultimo butta via il picco. Qui la valutazione e' deterministica, su un
+    ambiente separato, e la statistica di VecNormalize viene salvata INSIEME al
+    modello: altrimenti in valutazione si caricherebbero pesi di un istante e
+    normalizzazioni di un altro.
+    """
+    from stable_baselines3.common.callbacks import BaseCallback
+    from stable_baselines3.common.vec_env import sync_envs_normalization
+
+    class Migliore(BaseCallback):
+        def __init__(self):
+            super().__init__()
+            self.ogni = max(1, args.eval_ogni // cfg.sac.n_envs)
+            self.migliore = -np.inf
+            self.env_eval = None
+
+        def _on_step(self) -> bool:
+            if self.n_calls % self.ogni:
+                return True
+            if self.env_eval is None:
+                self.env_eval = crea_vecenv(cfg, 1, args.seed + 10_000)
+                self.env_eval.training = False
+                self.env_eval.norm_reward = False
+            sync_envs_normalization(env_addestramento, self.env_eval)
+            eps = [episodio(self.env_eval, self.model) for _ in range(args.eval_episodi)]
+            m = metriche(eps)
+            # criterio: prima il successo, poi il ritorno a parita' di successo
+            punteggio = m["success_rate"] * 1e6 + m["ritorno_medio"]
+            if punteggio > self.migliore:
+                self.migliore = punteggio
+                self.model.save(os.path.join(args.run_dir, "best_model"))
+                env_addestramento.save(os.path.join(args.run_dir, "vecnormalize.pkl"))
+                print(f"  [migliore] {self.num_timesteps} passi · "
+                      f"success {m['success_rate']:.2f} · ritorno {m['ritorno_medio']:+.0f}"
+                      f" · salvato")
+            return True
+
+    return Migliore()
+
+
 def addestra(cfg, args):
     from stable_baselines3.common.callbacks import CheckpointCallback
     env = crea_vecenv(cfg, cfg.sac.n_envs, args.seed)
@@ -154,11 +175,13 @@ def addestra(cfg, args):
     os.makedirs(args.run_dir, exist_ok=True)
     cb = [CheckpointCallback(save_freq=max(1, 50_000 // cfg.sac.n_envs),
                              save_path=args.run_dir, name_prefix="ckpt"),
-          _crea_callback_diario(args.diario_ogni)]
+          _crea_callback_diario(args.diario_ogni),
+          _crea_callback_migliore(cfg, args, env)]
     model.learn(total_timesteps=args.total_steps, callback=cb, progress_bar=False)
-    model.save(os.path.join(args.run_dir, "best_model"))
-    env.save(os.path.join(args.run_dir, "vecnormalize.pkl"))
-    print(f"\nsalvato in {args.run_dir}")
+    model.save(os.path.join(args.run_dir, "final_model"))
+    env.save(os.path.join(args.run_dir, "vecnormalize_final.pkl"))
+    print(f"\nsalvato in {args.run_dir}: best_model.zip (istantanea migliore) "
+          f"e final_model.zip (fine budget)")
 
 
 def carica(cfg, args, render_mode=None):
@@ -235,6 +258,9 @@ def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0):
             f"{k} {v:+.1f}" for k, v in sorted(accum.items(), key=lambda kv: -abs(kv[1]))))
     return dict(ritorno=tot, passi=passi,
                 is_success=bool(info.get("is_success", False)),
+                permissivo=bool(info.get("successo_permissivo", False)),
+                pulito=bool(info.get("successo_pulito", False)),
+                latch=float(info.get("latch_finale", 0.0)),
                 door_error=float(info.get("door_error", 0.0)),
                 fase=int(info.get("fsm_phase", 0)), termini=accum)
 
@@ -247,7 +273,10 @@ def metriche(eps):
     """
     err = np.array([e["door_error"] for e in eps], dtype=float)
     return {
+        # i tre livelli della tesi (§6.3.4): permissivo / true / clean
+        "successo_permissivo": float(np.mean([e["permissivo"] for e in eps])),
         "success_rate": float(np.mean([e["is_success"] for e in eps])),
+        "successo_pulito": float(np.mean([e["pulito"] for e in eps])),
         "errore_medio_con_segno": float(err.mean()),      # criterio 2: deve smettere
         "errore_medio_assoluto": float(np.abs(err).mean()),  # di essere sistematico
         "ritorno_medio": float(np.mean([e["ritorno"] for e in eps])),
@@ -263,7 +292,12 @@ def main():
                     help="l'UNICA differenza fra i due esperimenti (§6)")
     ap.add_argument("--play", action="store_true", help="mostra il robot")
     ap.add_argument("--eval", action="store_true", help="valuta e stampa le metriche del §7")
-    ap.add_argument("--total-steps", type=int, default=1_000_000)
+    ap.add_argument("--total-steps", type=int, default=1_500_000,
+                    help="budget: 1.5·10⁶, quello dichiarato dal progetto dell'apertura")
+    ap.add_argument("--eval-ogni", type=int, default=25_000,
+                    help="ogni N passi valuta e, se è la migliore, salva l'istantanea")
+    ap.add_argument("--eval-episodi", type=int, default=10,
+                    help="episodi deterministici per ogni valutazione periodica")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=101)
     ap.add_argument("--run-dir", default=None)
@@ -289,7 +323,8 @@ def main():
                          verboso=args.play or args.verbose, hud_ogni=args.hud_every)
             eps.append(e)
             print(f"  ep {i}: {e['passi']:>3} step · ritorno {e['ritorno']:+9.1f} · "
-                  f"errore {e['door_error']:+.4f} · {'RIUSCITO' if e['is_success'] else 'no'}")
+                  f"errore {e['door_error']:+.4f} · leva {e['latch']:+.3f} · "
+                  f"{'RIUSCITO' if e['is_success'] else ('quasi' if e['permissivo'] else 'no')}")
         print("\nmetriche §7:")
         for k, v in metriche(eps).items():
             print(f"  {k:<26} {v}")

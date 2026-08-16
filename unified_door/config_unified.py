@@ -4,8 +4,8 @@
 config_unified.py — UNA sola configurazione per i due compiti.
 
 Documento di riferimento: tabella_reward_machine_unificata.md
-  §1  i pesi dei sedici termini                    -> Weights
-  §6  i dieci parametri che distinguono i compiti  -> TaskSpec
+  §1  i pesi dei diciassette termini              -> Weights
+  §6  i nove parametri che distinguono i compiti   -> TaskSpec
   §6  SAC e soglie adattive, invariati             -> SacHyper, AdaptiveThresholds
 
 REGOLA DI RICONCILIAZIONE DEI PESI (§6)
@@ -20,13 +20,13 @@ from typing import Tuple
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# §6 — I DIECI PARAMETRI CHE DEFINISCONO IL COMPITO
+# §6 — I NOVE PARAMETRI CHE DEFINISCONO IL COMPITO
 # ═════════════════════════════════════════════════════════════════════════════
 @dataclass
 class TaskSpec:
-    """I dieci valori del §6. Nessuno di essi è un termine di ricompensa.
+    """I nove valori del §6. Nessuno di essi è un termine di ricompensa.
 
-    Quattro sono di SPECIFICA (che cosa vuoi ottenere), quattro sono GEOMETRICI
+    Quattro sono di SPECIFICA (che cosa vuoi ottenere), tre sono GEOMETRICI
     (com'è fatta la scena), due sono INTERRUTTORI di controllori.
     """
     nome: str
@@ -50,7 +50,6 @@ class TaskSpec:
 
     # --- interruttori di controllori (override sull'azione, non reward) -----
     riporto_leva: bool                # C0 riporto attivo della leva
-    leva_rilascio: float   # |leva| che libera il chiavistello, 0 = non serve
     escape: bool                      # C1 sfilamento guidato
 
     def campiona_bersaglio(self, corsa_min: float, corsa_max: float, rng) -> float:
@@ -79,9 +78,7 @@ CHIUSURA_V2_CURR1 = TaskSpec(
     theta_zero_frac=(0.70, 1.00),        # parte APERTA
     tol=0.03, t_hold_s=2.0,
     d_ret=0.13, z_ret=+0.04, orienta_normale=False,
-    # il bersaglio (1.5 % della corsa, tol 0.03) cade DENTRO il gioco del
-    # chiavistello (0.015 rad): la chiusura non deve mai girare la leva
-    riporto_leva=False, leva_rilascio=0.0, escape=False,
+    riporto_leva=False, escape=False,
 )
 
 APERTURA_V2_CURR1 = TaskSpec(
@@ -90,9 +87,7 @@ APERTURA_V2_CURR1 = TaskSpec(
     theta_zero_frac=(0.0, 0.0),          # parte CHIUSA
     tol=0.05, t_hold_s=1.0,
     d_ret=0.25, z_ret=0.0, orienta_normale=True,
-    # misurato sulle traiettorie del modello originale: la cerniera esce dal
-    # gioco del chiavistello a |leva| = 1.03 rad (mediana su 6 episodi risolti)
-    riporto_leva=True, leva_rilascio=1.03, escape=True,
+    riporto_leva=True, escape=True,
 )
 
 TASKS = {"close": CHIUSURA_V2_CURR1, "open": APERTURA_V2_CURR1}
@@ -139,6 +134,15 @@ class AdaptiveThresholds:
     friction_min: float = 0.05
     friction_max: float = 2.00
     hold_k_stiffness: float = 0.5        # timer allungato con molla più rigida
+    # §7 — LA SOGLIA DI SBLOCCO DEL CHIAVISTELLO, misurata sul modello MuJoCo.
+    # Non e' un parametro di compito: e' una proprieta' GEOMETRICA della porta,
+    # identica nei due versi e su tutti i modelli campionati. Con la leva a
+    # riposo la porta si ferma a 0.182 rad chiudendo e a 0.015 aprendo; oltre
+    # |leva| = 1.223 (chiusura) e 1.228 (apertura) il chiavistello libera il
+    # montante e la corsa e' completa. Bisezione su 5 modelli randomizzati:
+    # sempre gli stessi due valori.
+    leva_rilascio: float = 1.23
+    quota_leva: float = 0.30             # §7 quota del budget `progress` alla leva
     grasp_confirm_steps: int = 5         # REACH -> MOVE
     grasp_lose_steps: int = 3            # MOVE  -> REACH
     # §3 ISTERESI DELLA PRESA (close_generalized_v2/fsm_v2.py, ramo PHASE_PUSH,
@@ -154,6 +158,12 @@ class AdaptiveThresholds:
     retreat_hard_cap: int = 120
     latch_term_tol: float = 0.15         # |latch| ≤ tol_leva per terminare
     stall_guard_steps: int = 20
+    # §8 C0 — riporto della leva, costanti del sorgente dell'apertura
+    riporto_guadagno: float = 2.0        # ampiezza = 2.0·|leva|, con tetto
+    riporto_mag_max: float = 0.6
+    riporto_rampa: int = 4               # avvio morbido: niente strappo alla porta
+    riporto_rot_gain: float = 0.5        # rotazione del polso lungo l'arco
+    gabbia_margine: float = 0.015        # dita a diametro + margine: la barra ruota
     grip_lock_margin: float = 0.10   # [=] morsa in MOVE/HOLD: soglia + margine          # §3 guardia di stallo (NUOVA)
 
 
@@ -216,8 +226,16 @@ class Weights:
     # 9 contact -----------------------------------------------------------
     contact: float = 0.5             # [=] w_grip_contact=0.5
 
-    # 10 target -----------------------------------------------------------
+    # 10-11 IL MECCANISMO DI ARRESTO (tesi §6.4.1, classe F) -----------------
+    # Nella chiusura l'arresto sul bersaglio lo produce la FISICA: il pannello
+    # si appoggia al telaio. Nell'apertura il bersaglio e' un punto interno e la
+    # cerniera non ha molla di richiamo, quindi lo stesso arresto va scritto
+    # nella ricompensa: rampa dentro la tolleranza, rimbalzo fuori, e
+    # smorzamento della velocita' residua.
     target: float = 1.0              # [N] rampa clip(1−|e|/tol,0,1) — §1
+    target_bounce: float = 20.0      # [C] `hold_bounce`: −20·|e| fuori tolleranza, in HOLD
+    damp: float = 25.0               # [C] `hold_veldamp`: −25·|dθ/dt|, solo in HOLD
+    damp_floor: float = 0.01         # sotto 0.01 rad/s non interviene
 
                                      # la porta e' ferma e il termine non interviene
 

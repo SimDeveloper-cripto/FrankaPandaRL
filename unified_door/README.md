@@ -6,26 +6,26 @@ così ogni affermazione del documento si ritrova nel codice e viceversa.
 
 ```
 unified_door/
-  config_unified.py      i 16 pesi · i 10 parametri di compito · SAC invariato   (§1, §6)
+  config_unified.py      i 17 pesi · i 9 parametri di compito · SAC invariato   (§1, §6)
   state_unified.py       σ, e, A, lavoro, p, avanzamento                         (§4, §7)
   fsm_unified.py         4 fasi · gate bilaterale · guardia · isteresi · maschera (§3, §8)
-  reward_unified.py      i 16 termini e il potenziale Φ                          (§1, §2, §5)
+  reward_unified.py      i 17 termini e il potenziale Φ                          (§1, §2, §5)
   env_unified.py         osservazione a 126 · controllori · punto di ritiro      (§6, §8)
   train_unified.py       addestramento, play, valutazione
-  tests/test_unified.py  151 controlli contro la specifica (147 senza PROGETTI_ORIGINALI)
+  tests/test_unified.py  197 controlli contro la specifica (193 senza PROGETTI_ORIGINALI)
 ```
 
 ## Dove ritrovare ogni sezione del documento
 
 | documento | dove sta nel codice |
 |:---|:---|
-| §1 i sedici termini e i loro pesi | `TERMINI`, `Weights`, `UnifiedReward.compute` |
+| §1 i diciassette termini e i loro pesi | `TERMINI`, `Weights`, `UnifiedReward.compute` |
 | §2 lo shaping potenziale Φ | `Potenziale._phi` e `Potenziale.shaping` |
-| §3 le quattro fasi e le tre correzioni | `Fase`, `UnifiedFSM.step`, `UnifiedFSM.presa_persa` |
+| §3 le quattro fasi e le quattro correzioni | `Fase`, `UnifiedFSM.step`, `UnifiedFSM.presa_persa` |
 | §4 le grandezze derivate e i cinque usi di A | `DoorState` + `USI_DI_A` |
 | §4 le soglie adattive | `UnifiedFSM.soglia_distanza`, `.soglia_presa`, `UnifiedConfig.hold_steps` |
-| §5 la mappatura 41 → 16 e le due soppressioni | `ASSORBE`, `SOPPRESSI` |
-| §6 i dieci parametri di compito | `TaskSpec`, `CHIUSURA_V2_CURR1`, `APERTURA_V2_CURR1` |
+| §5 la mappatura 41 → 17 e la definizione soppressa | `ASSORBE`, `SOPPRESSI` |
+| §6 i nove parametri di compito | `TaskSpec`, `CHIUSURA_V2_CURR1`, `APERTURA_V2_CURR1` |
 | §6 SAC invariato e l'osservazione a 126 | `SacHyper`, `OBS_DIM`, `OBS_BLOCCHI` |
 | §7 `progress` come budget · ancoraggio · leva | `Weights.w_progress`, `DoorState.ancora/incassa/escursione` |
 | §8 i controllori, la maschera, il punto di ritiro | `Controllore`, `MASCHERA`, `_applica_controllori`, `_punto_ritiro` |
@@ -41,9 +41,9 @@ sono riscritti: sono importati dai progetti originali. Va indicata la cartella c
 export PROGETTI_ORIGINALI="/percorso/che/li/contiene"
 cd unified_door
 
-python3 tests/test_unified.py                                  # 151 controlli
-python3 train_unified.py --task close --total-steps 1000000
-python3 train_unified.py --task open  --total-steps 1000000
+python3 tests/test_unified.py                                  # 197 controlli
+python3 train_unified.py --task close --total-steps 1500000
+python3 train_unified.py --task open  --total-steps 1500000
 python3 train_unified.py --task close --eval --episodes 20
 mjpython train_unified.py --task open --play                   # su macOS
 ```
