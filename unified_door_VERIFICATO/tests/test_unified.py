@@ -1023,7 +1023,7 @@ def test_tre_livelli_di_successo():
           "§9 l'ambiente pubblica tutti e tre i livelli")
     check("abs(m[\"latch\"]) <= self.cfg.thr.latch_term_tol" in src,
           "§9 il true success richiede la leva tornata a riposo")
-    check("dist_ritiro\"] <= self.cfg.thr.retreat_settle_dist" in src,
+    check("self._ritiro_spostato >= self.cfg.thr.ritiro_spostamento_min" in src,
           "§9 il clean success richiede il ritiro completato")
     m = inspect.getsource(train_unified.metriche)
     for k in ("successo_permissivo", "success_rate", "successo_pulito"):
@@ -1040,6 +1040,76 @@ def test_osservazione_126():
     check(OBS_DIM == 126, "§6 l'osservazione unificata ha 126 dimensioni")
     check(sum(n for _, n in OBS_BLOCCHI) == 126, "§6 i blocchi sommano a 126")
 
+
+
+def test_clean_success_come_nel_progetto_originale():
+    """§7 — il clean success usa la definizione del progetto originale.
+
+    `scratch/test_open_task_v2/_common.py`, riga 382:
+
+        clean_success = true_success
+                        and retreat_moved_max >= STUCK_MOVE_THRESH   # 0.06 m
+                        and term_type == "PULITA"
+
+    dove `retreat_moved` (open_generalized_v2/env_v2.py, riga 542) vale
+    ‖eef − eef_al_rilascio‖: **di quanto la mano si è allontanata** da dove ha
+    lasciato la maniglia, tenuto al MASSIMO sull'episodio.
+    """
+    import inspect, env_unified, fsm_unified
+    src = inspect.getsource(env_unified.UnifiedDoorEnv.step)
+    check("self._ritiro_spostato >= self.cfg.thr.ritiro_spostamento_min" in src,
+          "§7 il criterio è lo spostamento, non la distanza da una posa")
+    check("self.fsm.s.uscita_pulita" in src,
+          "§7 il clean success richiede una terminazione PULITA")
+    letto = inspect.getsource(env_unified.UnifiedDoorEnv._leggi)
+    check("np.linalg.norm(self._eef - self._eef_rilascio)" in letto,
+          "§7 lo spostamento si misura dalla posa di rilascio")
+    check("self._ritiro_spostato = max(" in letto,
+          "§7 si tiene il massimo sull'episodio, come l'originale")
+    gate = inspect.getsource(fsm_unified.UnifiedFSM.step)
+    check("s.uscita_pulita = bool(pronto)" in gate,
+          "§7 l'uscita è pulita solo se per condizione, non per tetto duro")
+    for task in ("close", "open"):
+        check(UnifiedConfig.per(task).thr.ritiro_spostamento_min == 0.06,
+              f"§7 {task}: la soglia è quella dell'originale (0.06 m)")
+
+
+def test_il_gate_e_la_ricompensa_non_sono_toccati():
+    """§7 — il clean success è una MISURA, non un vincolo.
+
+    Correggerlo non deve poter cambiare il true success: il gate resta
+    `passi >= N ∧ A ∧ leva`, senza condizioni sul ritiro, e la funzione di
+    ricompensa è identica a quella dei modelli valutati.
+    """
+    import inspect
+    from fsm_unified import UnifiedFSM
+    gate = inspect.getsource(UnifiedFSM.step)
+    ramo = gate.split("pronto = ")[1].split("if pronto")[0]
+    check("dist_ritiro" not in ramo, "§7 il gate non guarda il ritiro")
+    check("door.A and abs(latch) <= self.thr.latch_term_tol" in ramo,
+          "§7 il gate chiede A e la leva, nient'altro")
+
+
+def test_valutazione_su_piu_semi():
+    """§8 — la valutazione può girare su più semi e unire i campioni.
+
+    Un solo seme fissa quali porte vengono provate. Ripetere su semi diversi
+    distingue «la politica funziona» da «il campione era fortunato», e l'unione
+    degli episodi restringe l'intervallo di confidenza.
+    """
+    import inspect, train_unified
+    src = inspect.getsource(train_unified)
+    check("--eval-seeds" in src, "§8 esiste l'opzione per più semi")
+    check("TUTTI I SEMI UNITI" in src, "§8 i campioni vengono uniti")
+    check("def wilson(" in src, "§8 l'intervallo di Wilson è calcolato")
+    m = inspect.getsource(train_unified.metriche)
+    for k in ("true_IC95", "pulito_IC95", "ritiro_spostamento_medio"):
+        check(k in m, f"§8 le metriche riportano {k}")
+    # lo stimatore deve coincidere con quello della suite originale
+    for k, n, atteso in ((200, 200, (0.981, 1.000)), (196, 200, (0.950, 0.992))):
+        lo, hi = train_unified.wilson(k, n)
+        check(abs(lo - atteso[0]) < 0.002 and abs(hi - atteso[1]) < 0.002,
+              f"§8 Wilson({k}/{n}) = [{lo:.3f}, {hi:.3f}]")
 
 if __name__ == "__main__":
     print("Verifica dell'implementazione contro tabella_reward_machine_unificata.md\n")

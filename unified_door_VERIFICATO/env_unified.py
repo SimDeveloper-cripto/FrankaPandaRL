@@ -115,6 +115,8 @@ class UnifiedDoorEnv(gym.Env):
         self._latch = 0.0
         self._passi_riporto = 0
         self._retreat_pos: Optional[np.ndarray] = None
+        self._eef_rilascio: Optional[np.ndarray] = None   # §7 posa al rilascio
+        self._ritiro_spostato: float = 0.0                # §7 spostamento massimo
         self._eef = np.zeros(3)
         self._handle = np.zeros(3)
         self._prev_cmd = None
@@ -169,6 +171,8 @@ class UnifiedDoorEnv(gym.Env):
         self.reward.reset()
         self._passi = 0
         self._retreat_pos = None
+        self._eef_rilascio = None
+        self._ritiro_spostato = 0.0
         self._prev_cmd = None
         self._contatto_prec = False
         return self._osserva(obs), {}
@@ -242,9 +246,13 @@ class UnifiedDoorEnv(gym.Env):
             "successo_permissivo": bool(self.fsm.s.fase >= Fase.HOLD),
             "is_success": bool(terminated and self.door.A
                                and abs(m["latch"]) <= self.cfg.thr.latch_term_tol),
+            "ritiro_spostato": float(self._ritiro_spostato),
+            # §7 — definizione del progetto originale (`_common.py` riga 382):
+            #   true success ∧ spostamento massimo >= 6 cm ∧ uscita PULITA
             "successo_pulito": bool(terminated and self.door.A
                                     and abs(m["latch"]) <= self.cfg.thr.latch_term_tol
-                                    and m["dist_ritiro"] <= self.cfg.thr.retreat_settle_dist),
+                                    and self._ritiro_spostato >= self.cfg.thr.ritiro_spostamento_min
+                                    and self.fsm.s.uscita_pulita),
         }
         return self._osserva(obs), reward, terminated, truncated, info
 
@@ -307,6 +315,17 @@ class UnifiedDoorEnv(gym.Env):
         vel_giunti = float(np.linalg.norm(obs.get("robot0_joint_vel", np.zeros(7))))
 
         # §8 il punto di ritiro, calcolato una volta all'ingresso in RELEASE
+        # §7 — quanto la mano si e' allontanata dalla posa in cui ha lasciato la
+        # maniglia. E' la grandezza con cui il progetto originale misura il
+        # ritiro (`retreat_moved`, open_generalized_v2/env_v2.py). Massimo
+        # sull'episodio, come fa l'originale.
+        if self.fsm.s.fase == Fase.RELEASE:
+            if self._eef_rilascio is None:
+                self._eef_rilascio = self._eef.copy()
+            self._ritiro_spostato = max(
+                self._ritiro_spostato,
+                float(np.linalg.norm(self._eef - self._eef_rilascio)))
+
         if self.fsm.s.fase == Fase.RELEASE and self._retreat_pos is None:
             self._retreat_pos = self._punto_ritiro(self._eef, *self._normale_porta())
         if self._retreat_pos is not None:

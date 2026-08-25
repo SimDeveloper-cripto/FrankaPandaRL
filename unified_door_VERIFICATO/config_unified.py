@@ -154,6 +154,11 @@ class AdaptiveThresholds:
     grip_release_margin: float = 0.20    # si perde sotto soglia − 0.20
     near_target_tol: float = 0.05        # al bersaglio le dita possono aprirsi
     retreat_settle_dist: float = 0.06
+    # §7 — soglia del ritiro, presa dal progetto originale
+    # (`scratch/test_open_task_v2/_common.py`, STUCK_MOVE_THRESH): la mano deve
+    # essersi allontanata di almeno 6 cm dalla posa in cui ha lasciato la
+    # maniglia. NON e' «distanza da una posa bersaglio».
+    ritiro_spostamento_min: float = 0.06
     retreat_target_steps: int = 30
     retreat_hard_cap: int = 120
     latch_term_tol: float = 0.15         # |latch| ≤ tol_leva per terminare

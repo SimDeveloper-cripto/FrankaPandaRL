@@ -3,6 +3,7 @@
 import os
 import time
 import argparse
+import math
 import numpy as np
 
 from config_unified import UnifiedConfig
@@ -260,23 +261,49 @@ def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0):
                 is_success=bool(info.get("is_success", False)),
                 permissivo=bool(info.get("successo_permissivo", False)),
                 pulito=bool(info.get("successo_pulito", False)),
+                spostato=float(info.get("ritiro_spostato", 0.0)),
                 latch=float(info.get("latch_finale", 0.0)),
                 door_error=float(info.get("door_error", 0.0)),
                 fase=int(info.get("fsm_phase", 0)), termini=accum)
 
 
+def wilson(k: int, n: int, z: float = 1.96):
+    """§8 — intervallo di confidenza di Wilson al 95 %.
+
+    E' lo stesso stimatore usato dalla suite dei due progetti separati
+    (`scratch/test_*_task_v2/stats_utils.py`), quindi i numeri sono
+    confrontabili con quelli della baseline senza conversioni.
+    """
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    d = 1.0 + z * z / n
+    centro = (p + z * z / (2 * n)) / d
+    meta = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return max(0.0, centro - meta), min(1.0, centro + meta)
+
+
 def metriche(eps):
-    """§7 — i due numeri che vanno riportati INSIEME.
+    """§8 — i tre livelli di successo, con l'intervallo di confidenza.
 
     Il risultato interessante non è «l'apertura è migliorata», è «la stessa
     macchina serve due compiti senza peggiorarne nessuno».
     """
     err = np.array([e["door_error"] for e in eps], dtype=float)
+    n = len(eps)
+    k_true = int(sum(e["is_success"] for e in eps))
+    k_pul = int(sum(e["pulito"] for e in eps))
+    lo_t, hi_t = wilson(k_true, n)
+    lo_p, hi_p = wilson(k_pul, n)
     return {
         # i tre livelli della tesi (§6.3.4): permissivo / true / clean
         "successo_permissivo": float(np.mean([e["permissivo"] for e in eps])),
         "success_rate": float(np.mean([e["is_success"] for e in eps])),
         "successo_pulito": float(np.mean([e["pulito"] for e in eps])),
+        "true_IC95": f"[{lo_t:.3f}, {hi_t:.3f}]",
+        "pulito_IC95": f"[{lo_p:.3f}, {hi_p:.3f}]",
+        # §7 quanto la mano si e' allontanata dalla posa di rilascio [m]
+        "ritiro_spostamento_medio": float(np.mean([e["spostato"] for e in eps])),
         "errore_medio_con_segno": float(err.mean()),      # criterio 2: deve smettere
         "errore_medio_assoluto": float(np.abs(err).mean()),  # di essere sistematico
         "ritorno_medio": float(np.mean([e["ritorno"] for e in eps])),
@@ -300,6 +327,10 @@ def main():
                     help="episodi deterministici per ogni valutazione periodica")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=101)
+    ap.add_argument("--eval-seeds", type=str, default=None,
+                    help="§8 semi di valutazione separati da virgola, es. 42,101,7")
+    ap.add_argument("--eval-offset", type=int, default=0,
+                    help="§8 scarto dei semi di valutazione (0 = compatibile con le misure precedenti)")
     ap.add_argument("--run-dir", default=None)
     ap.add_argument("--slow", type=float, default=1.0, help="rallenta il play")
     ap.add_argument("--verbose", action="store_true",
@@ -316,18 +347,39 @@ def main():
 
     if args.play or args.eval:
         env, model = carica(cfg, args, render_mode="human" if args.play else None)
-        eps = []
-        for i in range(1 if args.play else args.episodes):
-            np.random.seed(args.seed + i)
-            e = episodio(env, model, render=args.play, slow=args.slow,
-                         verboso=args.play or args.verbose, hud_ogni=args.hud_every)
-            eps.append(e)
-            print(f"  ep {i}: {e['passi']:>3} step · ritorno {e['ritorno']:+9.1f} · "
-                  f"errore {e['door_error']:+.4f} · leva {e['latch']:+.3f} · "
-                  f"{'RIUSCITO' if e['is_success'] else ('quasi' if e['permissivo'] else 'no')}")
-        print("\nmetriche §7:")
-        for k, v in metriche(eps).items():
-            print(f"  {k:<26} {v}")
+
+        # §8 — VALUTAZIONE SU PIU' SEMI. Un solo seme fissa quali porte vengono
+        # provate: ripeterla su semi diversi mostra se il risultato dipende dal
+        # campione o dalla politica. I semi sono indipendenti fra loro e l'unione
+        # degli episodi da' l'intervallo di confidenza piu' stretto.
+        semi = ([int(s) for s in args.eval_seeds.split(",") if s.strip()]
+                if args.eval_seeds else [args.seed])
+        n_ep = 1 if args.play else args.episodes
+        tutti = []
+
+        for seme in semi:
+            eps = []
+            if len(semi) > 1:
+                print(f"\n─── seme di valutazione {seme} · {n_ep} episodi ───")
+            for i in range(n_ep):
+                # `eval_offset` tiene gli episodi di valutazione lontani da
+                # quelli visti in addestramento (che usa `seed + 0..n_envs-1`).
+                np.random.seed(seme + args.eval_offset + i)
+                e = episodio(env, model, render=args.play, slow=args.slow,
+                             verboso=args.play or args.verbose, hud_ogni=args.hud_every)
+                eps.append(e)
+                print(f"  ep {i}: {e['passi']:>3} step · ritorno {e['ritorno']:+9.1f} · "
+                      f"errore {e['door_error']:+.4f} · leva {e['latch']:+.3f} · "
+                      f"{'RIUSCITO' if e['is_success'] else ('quasi' if e['permissivo'] else 'no')}")
+            print(f"\nmetriche §8" + (f" · seme {seme}:" if len(semi) > 1 else ":"))
+            for k, v in metriche(eps).items():
+                print(f"  {k:<26} {v}")
+            tutti.extend(eps)
+
+        if len(semi) > 1:
+            print(f"\n═══ TUTTI I SEMI UNITI · {len(tutti)} episodi ═══")
+            for k, v in metriche(tutti).items():
+                print(f"  {k:<26} {v}")
         env.close()
     else:
         addestra(cfg, args)

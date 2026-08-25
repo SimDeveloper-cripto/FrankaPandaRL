@@ -1,0 +1,711 @@
+
+compito: chiusura_v2_curr1
+  θ* = (0.015, 0.015) della corsa   ·   θ₀ = (0.7, 1.0)
+  tol = 0.03 rad   ·   T_hold = 2.0 s
+  d_ret = 0.13 m · z_ret = 0.04 m · normale diretta
+  controllori: riporto leva = False · escape = False
+  SAC invariato (§6): rete (512, 512), lr 0.0003, γ 0.95, target entropy -3.0
+  budget di progresso: 700.0 su tutta l'escursione
+
+
+─── seme di valutazione 42 · 200 episodi ───
+  ep 0: 160 step · ritorno    +928.2 · errore -0.0046 · leva -0.095 · RIUSCITO
+  ep 1: 142 step · ritorno   +1014.7 · errore -0.0015 · leva -0.026 · RIUSCITO
+  ep 2: 180 step · ritorno    +727.3 · errore -0.0052 · leva +0.078 · RIUSCITO
+  ep 3: 118 step · ritorno   +1188.6 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 4: 128 step · ritorno   +1098.0 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 5: 135 step · ritorno    +775.9 · errore +0.0082 · leva -0.047 · RIUSCITO
+  ep 6: 135 step · ritorno    +717.1 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 7: 127 step · ritorno    +492.9 · errore -0.0021 · leva +0.113 · RIUSCITO
+  ep 8: 135 step · ritorno   +1117.7 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 9: 135 step · ritorno   +1105.2 · errore -0.0025 · leva -0.022 · RIUSCITO
+  ep 10: 123 step · ritorno   +1068.8 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 11: 137 step · ritorno   +1049.8 · errore +0.0039 · leva -0.018 · RIUSCITO
+  ep 12: 140 step · ritorno   +1014.9 · errore +0.0081 · leva -0.029 · RIUSCITO
+  ep 13: 148 step · ritorno    +771.8 · errore -0.0038 · leva -0.023 · RIUSCITO
+  ep 14: 118 step · ritorno   +1068.0 · errore -0.0033 · leva -0.025 · RIUSCITO
+  ep 15: 125 step · ritorno    +700.3 · errore -0.0051 · leva -0.044 · RIUSCITO
+  ep 16: 126 step · ritorno   +1015.6 · errore +0.0089 · leva -0.034 · RIUSCITO
+  ep 17: 128 step · ritorno   +1037.8 · errore +0.0056 · leva -0.025 · RIUSCITO
+  ep 18: 131 step · ritorno    +969.4 · errore +0.0084 · leva -0.045 · RIUSCITO
+  ep 19: 120 step · ritorno   +1102.9 · errore +0.0019 · leva -0.024 · RIUSCITO
+  ep 20: 157 step · ritorno    +510.6 · errore +0.0086 · leva -0.025 · RIUSCITO
+  ep 21: 121 step · ritorno   +1101.2 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 22: 132 step · ritorno   +1040.7 · errore +0.0020 · leva -0.027 · RIUSCITO
+  ep 23: 141 step · ritorno    +790.8 · errore +0.0049 · leva +0.010 · RIUSCITO
+  ep 24: 146 step · ritorno    +765.2 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 25:  83 step · ritorno    +954.0 · errore -0.0040 · leva -0.020 · RIUSCITO
+  ep 26: 160 step · ritorno   +1023.7 · errore -0.0060 · leva +0.043 · RIUSCITO
+  ep 27: 208 step · ritorno    +950.6 · errore -0.0060 · leva -0.038 · RIUSCITO
+  ep 28:  81 step · ritorno   +1011.3 · errore -0.0060 · leva -0.044 · RIUSCITO
+  ep 29: 131 step · ritorno   +1000.9 · errore -0.0031 · leva -0.027 · RIUSCITO
+  ep 30: 143 step · ritorno    +845.3 · errore +0.0081 · leva +0.012 · RIUSCITO
+  ep 31: 139 step · ritorno   +1081.4 · errore +0.0051 · leva -0.028 · RIUSCITO
+  ep 32: 133 step · ritorno    +820.8 · errore +0.0088 · leva -0.033 · RIUSCITO
+  ep 33: 125 step · ritorno    +562.9 · errore +0.0075 · leva -0.064 · RIUSCITO
+  ep 34: 136 step · ritorno   +1020.5 · errore +0.0024 · leva -0.021 · RIUSCITO
+  ep 35: 355 step · ritorno    +321.9 · errore +0.0085 · leva -0.025 · RIUSCITO
+  ep 36: 132 step · ritorno    +477.2 · errore +0.0013 · leva -0.107 · RIUSCITO
+  ep 37: 124 step · ritorno   +1037.0 · errore +0.0008 · leva -0.019 · RIUSCITO
+  ep 38: 132 step · ritorno   +1081.5 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 39: 131 step · ritorno   +1054.7 · errore +0.0083 · leva -0.065 · RIUSCITO
+  ep 40: 137 step · ritorno   +1000.8 · errore +0.0074 · leva -0.028 · RIUSCITO
+  ep 41: 140 step · ritorno   +1076.7 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 42: 146 step · ritorno    +819.6 · errore +0.0059 · leva -0.025 · RIUSCITO
+  ep 43: 125 step · ritorno   +1073.8 · errore +0.0087 · leva -0.061 · RIUSCITO
+  ep 44: 145 step · ritorno   +1069.2 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 45: 119 step · ritorno   +1162.7 · errore -0.0031 · leva -0.026 · RIUSCITO
+  ep 46: 135 step · ritorno   +1009.4 · errore -0.0056 · leva +0.046 · RIUSCITO
+  ep 47: 132 step · ritorno   +1046.3 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 48: 160 step · ritorno    +722.7 · errore -0.0060 · leva -0.017 · RIUSCITO
+  ep 49: 144 step · ritorno    +824.5 · errore -0.0060 · leva -0.069 · RIUSCITO
+  ep 50: 119 step · ritorno   +1082.9 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 51: 135 step · ritorno   +1054.6 · errore +0.0088 · leva -0.031 · RIUSCITO
+  ep 52: 124 step · ritorno   +1058.5 · errore +0.0077 · leva -0.099 · RIUSCITO
+  ep 53: 127 step · ritorno    +760.2 · errore -0.0015 · leva -0.008 · RIUSCITO
+  ep 54: 141 step · ritorno   +1061.0 · errore -0.0028 · leva +0.128 · RIUSCITO
+  ep 55: 123 step · ritorno   +1132.5 · errore -0.0030 · leva -0.024 · RIUSCITO
+  ep 56: 135 step · ritorno   +1070.7 · errore -0.0022 · leva +0.017 · RIUSCITO
+  ep 57: 119 step · ritorno   +1094.0 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 58: 131 step · ritorno   +1047.6 · errore +0.0084 · leva -0.050 · RIUSCITO
+  ep 59: 125 step · ritorno   +1098.8 · errore -0.0028 · leva -0.026 · RIUSCITO
+  ep 60: 128 step · ritorno   +1153.6 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 61: 206 step · ritorno    +749.5 · errore -0.0060 · leva -0.025 · RIUSCITO
+  ep 62: 121 step · ritorno    +555.1 · errore +0.0005 · leva -0.040 · RIUSCITO
+  ep 63: 152 step · ritorno    +860.7 · errore -0.0060 · leva +0.054 · RIUSCITO
+  ep 64: 148 step · ritorno    +362.6 · errore -0.0060 · leva -0.039 · RIUSCITO
+  ep 65: 146 step · ritorno    +766.2 · errore -0.0030 · leva -0.026 · RIUSCITO
+  ep 66: 135 step · ritorno    +676.6 · errore +0.0078 · leva -0.027 · RIUSCITO
+  ep 67: 127 step · ritorno   +1085.2 · errore +0.0088 · leva -0.032 · RIUSCITO
+  ep 68: 143 step · ritorno    +858.5 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 69: 129 step · ritorno   +1034.5 · errore +0.0086 · leva -0.068 · RIUSCITO
+  ep 70: 129 step · ritorno   +1063.8 · errore +0.0041 · leva -0.103 · RIUSCITO
+  ep 71: 162 step · ritorno    +867.7 · errore -0.0041 · leva +0.061 · RIUSCITO
+  ep 72: 167 step · ritorno    +784.9 · errore -0.0060 · leva -0.023 · RIUSCITO
+  ep 73: 130 step · ritorno   +1052.5 · errore +0.0060 · leva -0.029 · RIUSCITO
+  ep 74: 129 step · ritorno    +441.1 · errore -0.0004 · leva +0.089 · RIUSCITO
+  ep 75: 133 step · ritorno   +1062.6 · errore -0.0001 · leva -0.114 · RIUSCITO
+  ep 76: 124 step · ritorno   +1137.3 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 77: 123 step · ritorno   +1100.5 · errore +0.0006 · leva -0.023 · RIUSCITO
+  ep 78: 120 step · ritorno   +1072.0 · errore -0.0041 · leva -0.023 · RIUSCITO
+  ep 79: 137 step · ritorno    +772.8 · errore -0.0026 · leva -0.026 · RIUSCITO
+  ep 80: 146 step · ritorno    +692.5 · errore -0.0019 · leva -0.027 · RIUSCITO
+  ep 81: 139 step · ritorno   +1113.4 · errore -0.0037 · leva -0.025 · RIUSCITO
+  ep 82: 138 step · ritorno   +1039.4 · errore -0.0060 · leva -0.026 · RIUSCITO
+  ep 83:  80 step · ritorno    +993.6 · errore +0.0060 · leva -0.115 · RIUSCITO
+  ep 84: 142 step · ritorno    +841.8 · errore -0.0060 · leva -0.018 · RIUSCITO
+  ep 85: 127 step · ritorno   +1035.6 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 86: 128 step · ritorno    +993.8 · errore -0.0009 · leva +0.014 · RIUSCITO
+  ep 87: 137 step · ritorno    +684.8 · errore +0.0086 · leva -0.025 · RIUSCITO
+  ep 88: 136 step · ritorno    +922.5 · errore +0.0048 · leva -0.046 · RIUSCITO
+  ep 89: 127 step · ritorno   +1080.2 · errore -0.0060 · leva -0.082 · RIUSCITO
+  ep 90: 124 step · ritorno   +1199.9 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 91:  80 step · ritorno    +980.3 · errore +0.0053 · leva -0.026 · RIUSCITO
+  ep 92:  81 step · ritorno    +908.1 · errore +0.0055 · leva -0.010 · RIUSCITO
+  ep 93: 125 step · ritorno   +1083.0 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 94: 138 step · ritorno   +1003.0 · errore -0.0031 · leva -0.026 · RIUSCITO
+  ep 95: 122 step · ritorno    +992.2 · errore +0.0017 · leva -0.043 · RIUSCITO
+  ep 96: 124 step · ritorno   +1102.8 · errore -0.0038 · leva -0.023 · RIUSCITO
+  ep 97: 135 step · ritorno   +1049.9 · errore +0.0084 · leva -0.108 · RIUSCITO
+  ep 98: 132 step · ritorno   +1051.1 · errore -0.0013 · leva +0.011 · RIUSCITO
+  ep 99: 119 step · ritorno   +1126.5 · errore -0.0034 · leva -0.023 · RIUSCITO
+  ep 100:  82 step · ritorno   +1034.5 · errore +0.0040 · leva -0.025 · RIUSCITO
+  ep 101: 133 step · ritorno    +763.6 · errore -0.0044 · leva -0.016 · RIUSCITO
+  ep 102: 137 step · ritorno    +966.7 · errore -0.0028 · leva -0.026 · RIUSCITO
+  ep 103: 131 step · ritorno    +780.1 · errore +0.0081 · leva -0.027 · RIUSCITO
+  ep 104: 124 step · ritorno    +785.1 · errore -0.0060 · leva -0.083 · RIUSCITO
+  ep 105: 126 step · ritorno   +1097.5 · errore -0.0035 · leva -0.022 · RIUSCITO
+  ep 106: 119 step · ritorno    +773.8 · errore -0.0044 · leva -0.018 · RIUSCITO
+  ep 107: 124 step · ritorno   +1005.5 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 108: 123 step · ritorno   +1107.4 · errore +0.0034 · leva -0.023 · RIUSCITO
+  ep 109: 124 step · ritorno   +1074.4 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 110: 138 step · ritorno   +1083.5 · errore +0.0090 · leva -0.027 · RIUSCITO
+  ep 111: 132 step · ritorno    +841.8 · errore -0.0060 · leva -0.127 · RIUSCITO
+  ep 112: 126 step · ritorno    +669.1 · errore -0.0031 · leva -0.024 · RIUSCITO
+  ep 113: 127 step · ritorno   +1096.7 · errore +0.0085 · leva -0.034 · RIUSCITO
+  ep 114: 127 step · ritorno   +1071.2 · errore +0.0082 · leva -0.037 · RIUSCITO
+  ep 115: 118 step · ritorno   +1088.0 · errore -0.0042 · leva -0.010 · RIUSCITO
+  ep 116: 125 step · ritorno    +738.4 · errore +0.0065 · leva -0.064 · RIUSCITO
+  ep 117: 120 step · ritorno   +1157.1 · errore -0.0033 · leva -0.024 · RIUSCITO
+  ep 118: 119 step · ritorno   +1089.0 · errore +0.0007 · leva -0.010 · RIUSCITO
+  ep 119: 119 step · ritorno   +1139.0 · errore -0.0044 · leva -0.017 · RIUSCITO
+  ep 120: 141 step · ritorno    +822.0 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 121:  83 step · ritorno   +1015.0 · errore -0.0045 · leva -0.013 · RIUSCITO
+  ep 122: 137 step · ritorno    +680.3 · errore +0.0052 · leva -0.021 · RIUSCITO
+  ep 123: 126 step · ritorno   +1089.7 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 124: 130 step · ritorno   +1071.3 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 125: 119 step · ritorno   +1123.5 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 126:  83 step · ritorno    +969.0 · errore -0.0043 · leva -0.020 · RIUSCITO
+  ep 127: 158 step · ritorno    +835.3 · errore -0.0060 · leva -0.029 · RIUSCITO
+  ep 128: 137 step · ritorno    +863.0 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 129: 129 step · ritorno   +1079.6 · errore +0.0084 · leva -0.051 · RIUSCITO
+  ep 130:  82 step · ritorno    +942.8 · errore +0.0087 · leva -0.032 · RIUSCITO
+  ep 131: 140 step · ritorno    +706.7 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 132: 121 step · ritorno    +800.8 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 133: 122 step · ritorno   +1077.2 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 134: 129 step · ritorno    +544.8 · errore -0.0045 · leva +0.067 · RIUSCITO
+  ep 135: 130 step · ritorno   +1064.0 · errore +0.0083 · leva -0.036 · RIUSCITO
+  ep 136: 129 step · ritorno    +598.8 · errore -0.0002 · leva -0.110 · RIUSCITO
+  ep 137: 123 step · ritorno    +654.8 · errore +0.0030 · leva +0.078 · RIUSCITO
+  ep 138: 126 step · ritorno   +1065.7 · errore -0.0003 · leva -0.027 · RIUSCITO
+  ep 139: 124 step · ritorno   +1054.2 · errore +0.0078 · leva -0.058 · RIUSCITO
+  ep 140: 124 step · ritorno   +1078.9 · errore -0.0034 · leva -0.024 · RIUSCITO
+  ep 141: 120 step · ritorno   +1092.4 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 142: 141 step · ritorno    +558.6 · errore -0.0049 · leva -0.011 · RIUSCITO
+  ep 143: 143 step · ritorno   +1042.7 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 144: 128 step · ritorno   +1154.1 · errore -0.0039 · leva -0.026 · RIUSCITO
+  ep 145: 145 step · ritorno   +1067.8 · errore -0.0041 · leva -0.023 · RIUSCITO
+  ep 146: 173 step · ritorno    +639.0 · errore -0.0060 · leva -0.060 · RIUSCITO
+  ep 147: 140 step · ritorno    +847.0 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 148: 123 step · ritorno   +1122.4 · errore -0.0033 · leva -0.025 · RIUSCITO
+  ep 149: 124 step · ritorno   +1075.7 · errore +0.0089 · leva -0.034 · RIUSCITO
+  ep 150: 143 step · ritorno   +1061.4 · errore +0.0084 · leva -0.034 · RIUSCITO
+  ep 151: 121 step · ritorno    +570.5 · errore +0.0006 · leva -0.047 · RIUSCITO
+  ep 152: 600 step · ritorno    -350.4 · errore +0.2801 · leva +1.572 · no
+  ep 153:  80 step · ritorno   +1069.5 · errore -0.0039 · leva -0.024 · RIUSCITO
+  ep 154: 126 step · ritorno   +1051.4 · errore +0.0083 · leva -0.108 · RIUSCITO
+  ep 155: 125 step · ritorno   +1122.0 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 156: 260 step · ritorno    +496.3 · errore +0.0066 · leva -0.022 · RIUSCITO
+  ep 157: 129 step · ritorno   +1107.5 · errore +0.0084 · leva -0.078 · RIUSCITO
+  ep 158: 119 step · ritorno   +1111.1 · errore +0.0031 · leva -0.017 · RIUSCITO
+  ep 159: 133 step · ritorno    +331.7 · errore +0.0084 · leva -0.025 · RIUSCITO
+  ep 160: 164 step · ritorno    +510.4 · errore +0.0083 · leva -0.007 · RIUSCITO
+  ep 161: 122 step · ritorno   +1154.2 · errore -0.0033 · leva -0.024 · RIUSCITO
+  ep 162: 127 step · ritorno   +1145.6 · errore -0.0034 · leva -0.024 · RIUSCITO
+  ep 163: 124 step · ritorno   +1140.3 · errore -0.0030 · leva -0.025 · RIUSCITO
+  ep 164: 134 step · ritorno   +1043.6 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 165: 126 step · ritorno   +1126.7 · errore -0.0037 · leva -0.024 · RIUSCITO
+  ep 166: 126 step · ritorno    +632.1 · errore -0.0060 · leva +0.117 · RIUSCITO
+  ep 167: 121 step · ritorno   +1154.4 · errore -0.0004 · leva -0.024 · RIUSCITO
+  ep 168: 179 step · ritorno    +845.3 · errore -0.0060 · leva -0.108 · RIUSCITO
+  ep 169: 306 step · ritorno    +420.9 · errore +0.0020 · leva -0.026 · RIUSCITO
+  ep 170: 128 step · ritorno   +1074.9 · errore -0.0038 · leva -0.026 · RIUSCITO
+  ep 171: 131 step · ritorno   +1042.1 · errore +0.0087 · leva -0.109 · RIUSCITO
+  ep 172: 134 step · ritorno    +863.4 · errore -0.0060 · leva -0.032 · RIUSCITO
+  ep 173: 143 step · ritorno   +1071.6 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 174: 137 step · ritorno   +1000.4 · errore +0.0087 · leva -0.031 · RIUSCITO
+  ep 175: 143 step · ritorno    +745.6 · errore -0.0025 · leva -0.026 · RIUSCITO
+  ep 176: 179 step · ritorno    +922.5 · errore -0.0060 · leva -0.009 · RIUSCITO
+  ep 177: 135 step · ritorno    +520.6 · errore +0.0029 · leva -0.056 · RIUSCITO
+  ep 178: 341 step · ritorno    +796.3 · errore -0.0060 · leva +1.674 · quasi
+  ep 179: 188 step · ritorno    +851.8 · errore +0.0087 · leva -0.025 · RIUSCITO
+  ep 180: 130 step · ritorno   +1081.1 · errore -0.0040 · leva -0.025 · RIUSCITO
+  ep 181: 143 step · ritorno   +1029.0 · errore -0.0059 · leva +0.081 · RIUSCITO
+  ep 182: 266 step · ritorno    +811.0 · errore +0.0122 · leva +0.724 · quasi
+  ep 183: 122 step · ritorno    +775.0 · errore +0.0087 · leva -0.026 · RIUSCITO
+  ep 184: 138 step · ritorno   +1089.0 · errore -0.0060 · leva +0.028 · RIUSCITO
+  ep 185: 145 step · ritorno    +794.0 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 186: 127 step · ritorno   +1045.7 · errore +0.0087 · leva -0.046 · RIUSCITO
+  ep 187: 132 step · ritorno   +1016.3 · errore -0.0036 · leva -0.026 · RIUSCITO
+  ep 188: 377 step · ritorno    +469.3 · errore -0.0060 · leva +0.012 · RIUSCITO
+  ep 189: 204 step · ritorno    +613.1 · errore -0.0060 · leva -0.018 · RIUSCITO
+  ep 190: 452 step · ritorno    +264.7 · errore -0.0060 · leva -0.024 · RIUSCITO
+  ep 191: 150 step · ritorno    +717.5 · errore -0.0060 · leva -0.058 · RIUSCITO
+  ep 192: 151 step · ritorno    +768.9 · errore -0.0031 · leva -0.027 · RIUSCITO
+  ep 193:  80 step · ritorno   +1076.9 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 194: 202 step · ritorno    +160.2 · errore -0.0060 · leva -0.083 · RIUSCITO
+  ep 195:  83 step · ritorno    +987.9 · errore +0.0039 · leva +0.000 · RIUSCITO
+  ep 196: 140 step · ritorno    +981.7 · errore +0.0012 · leva -0.027 · RIUSCITO
+  ep 197: 139 step · ritorno    +991.4 · errore -0.0027 · leva -0.027 · RIUSCITO
+  ep 198: 138 step · ritorno    +822.6 · errore +0.0078 · leva -0.046 · RIUSCITO
+  ep 199: 118 step · ritorno   +1073.4 · errore -0.0023 · leva +0.009 · RIUSCITO
+
+metriche §8 · seme 42:
+  successo_permissivo        0.995
+  success_rate               0.985
+  successo_pulito            0.975
+  true_IC95                  [0.957, 0.995]
+  pulito_IC95                [0.943, 0.989]
+  ritiro_spostamento_medio   0.1912562302893874
+  errore_medio_con_segno     0.0012483332877508628
+  errore_medio_assoluto      0.006144771412959198
+  ritorno_medio              916.6872151037178
+  passi_medi                 141.485
+  n_episodi                  200
+
+─── seme di valutazione 101 · 200 episodi ───
+  ep 0: 125 step · ritorno   +1098.8 · errore -0.0028 · leva -0.026 · RIUSCITO
+  ep 1: 128 step · ritorno   +1153.6 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 2: 206 step · ritorno    +749.5 · errore -0.0060 · leva -0.025 · RIUSCITO
+  ep 3: 121 step · ritorno    +555.1 · errore +0.0005 · leva -0.040 · RIUSCITO
+  ep 4: 152 step · ritorno    +860.7 · errore -0.0060 · leva +0.054 · RIUSCITO
+  ep 5: 148 step · ritorno    +362.6 · errore -0.0060 · leva -0.039 · RIUSCITO
+  ep 6: 146 step · ritorno    +766.2 · errore -0.0030 · leva -0.026 · RIUSCITO
+  ep 7: 135 step · ritorno    +676.6 · errore +0.0078 · leva -0.027 · RIUSCITO
+  ep 8: 127 step · ritorno   +1085.2 · errore +0.0088 · leva -0.032 · RIUSCITO
+  ep 9: 143 step · ritorno    +858.5 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 10: 129 step · ritorno   +1034.5 · errore +0.0086 · leva -0.068 · RIUSCITO
+  ep 11: 129 step · ritorno   +1063.8 · errore +0.0041 · leva -0.103 · RIUSCITO
+  ep 12: 162 step · ritorno    +867.7 · errore -0.0041 · leva +0.061 · RIUSCITO
+  ep 13: 167 step · ritorno    +784.9 · errore -0.0060 · leva -0.023 · RIUSCITO
+  ep 14: 130 step · ritorno   +1052.5 · errore +0.0060 · leva -0.029 · RIUSCITO
+  ep 15: 129 step · ritorno    +441.1 · errore -0.0004 · leva +0.089 · RIUSCITO
+  ep 16: 133 step · ritorno   +1062.6 · errore -0.0001 · leva -0.114 · RIUSCITO
+  ep 17: 124 step · ritorno   +1137.3 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 18: 123 step · ritorno   +1100.5 · errore +0.0006 · leva -0.023 · RIUSCITO
+  ep 19: 120 step · ritorno   +1072.0 · errore -0.0041 · leva -0.023 · RIUSCITO
+  ep 20: 137 step · ritorno    +772.8 · errore -0.0026 · leva -0.026 · RIUSCITO
+  ep 21: 146 step · ritorno    +692.5 · errore -0.0019 · leva -0.027 · RIUSCITO
+  ep 22: 139 step · ritorno   +1113.4 · errore -0.0037 · leva -0.025 · RIUSCITO
+  ep 23: 138 step · ritorno   +1039.4 · errore -0.0060 · leva -0.026 · RIUSCITO
+  ep 24:  80 step · ritorno    +993.6 · errore +0.0060 · leva -0.115 · RIUSCITO
+  ep 25: 142 step · ritorno    +841.8 · errore -0.0060 · leva -0.018 · RIUSCITO
+  ep 26: 127 step · ritorno   +1035.6 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 27: 128 step · ritorno    +993.8 · errore -0.0009 · leva +0.014 · RIUSCITO
+  ep 28: 137 step · ritorno    +684.8 · errore +0.0086 · leva -0.025 · RIUSCITO
+  ep 29: 136 step · ritorno    +922.5 · errore +0.0048 · leva -0.046 · RIUSCITO
+  ep 30: 127 step · ritorno   +1080.2 · errore -0.0060 · leva -0.082 · RIUSCITO
+  ep 31: 124 step · ritorno   +1199.9 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 32:  80 step · ritorno    +980.3 · errore +0.0053 · leva -0.026 · RIUSCITO
+  ep 33:  81 step · ritorno    +908.1 · errore +0.0055 · leva -0.010 · RIUSCITO
+  ep 34: 125 step · ritorno   +1083.0 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 35: 138 step · ritorno   +1003.0 · errore -0.0031 · leva -0.026 · RIUSCITO
+  ep 36: 122 step · ritorno    +992.2 · errore +0.0017 · leva -0.043 · RIUSCITO
+  ep 37: 124 step · ritorno   +1102.8 · errore -0.0038 · leva -0.023 · RIUSCITO
+  ep 38: 135 step · ritorno   +1049.9 · errore +0.0084 · leva -0.108 · RIUSCITO
+  ep 39: 132 step · ritorno   +1051.1 · errore -0.0013 · leva +0.011 · RIUSCITO
+  ep 40: 119 step · ritorno   +1126.5 · errore -0.0034 · leva -0.023 · RIUSCITO
+  ep 41:  82 step · ritorno   +1034.5 · errore +0.0040 · leva -0.025 · RIUSCITO
+  ep 42: 133 step · ritorno    +763.6 · errore -0.0044 · leva -0.016 · RIUSCITO
+  ep 43: 137 step · ritorno    +966.7 · errore -0.0028 · leva -0.026 · RIUSCITO
+  ep 44: 131 step · ritorno    +780.1 · errore +0.0081 · leva -0.027 · RIUSCITO
+  ep 45: 124 step · ritorno    +785.1 · errore -0.0060 · leva -0.083 · RIUSCITO
+  ep 46: 126 step · ritorno   +1097.5 · errore -0.0035 · leva -0.022 · RIUSCITO
+  ep 47: 119 step · ritorno    +773.8 · errore -0.0044 · leva -0.018 · RIUSCITO
+  ep 48: 124 step · ritorno   +1005.5 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 49: 123 step · ritorno   +1107.4 · errore +0.0034 · leva -0.023 · RIUSCITO
+  ep 50: 124 step · ritorno   +1074.4 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 51: 138 step · ritorno   +1083.5 · errore +0.0090 · leva -0.027 · RIUSCITO
+  ep 52: 132 step · ritorno    +841.8 · errore -0.0060 · leva -0.127 · RIUSCITO
+  ep 53: 126 step · ritorno    +669.1 · errore -0.0031 · leva -0.024 · RIUSCITO
+  ep 54: 127 step · ritorno   +1096.7 · errore +0.0085 · leva -0.034 · RIUSCITO
+  ep 55: 127 step · ritorno   +1071.2 · errore +0.0082 · leva -0.037 · RIUSCITO
+  ep 56: 118 step · ritorno   +1088.0 · errore -0.0042 · leva -0.010 · RIUSCITO
+  ep 57: 125 step · ritorno    +738.4 · errore +0.0065 · leva -0.064 · RIUSCITO
+  ep 58: 120 step · ritorno   +1157.1 · errore -0.0033 · leva -0.024 · RIUSCITO
+  ep 59: 119 step · ritorno   +1089.0 · errore +0.0007 · leva -0.010 · RIUSCITO
+  ep 60: 119 step · ritorno   +1139.0 · errore -0.0044 · leva -0.017 · RIUSCITO
+  ep 61: 141 step · ritorno    +822.0 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 62:  83 step · ritorno   +1015.0 · errore -0.0045 · leva -0.013 · RIUSCITO
+  ep 63: 137 step · ritorno    +680.3 · errore +0.0052 · leva -0.021 · RIUSCITO
+  ep 64: 126 step · ritorno   +1089.7 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 65: 130 step · ritorno   +1071.3 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 66: 119 step · ritorno   +1123.5 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 67:  83 step · ritorno    +969.0 · errore -0.0043 · leva -0.020 · RIUSCITO
+  ep 68: 158 step · ritorno    +835.3 · errore -0.0060 · leva -0.029 · RIUSCITO
+  ep 69: 137 step · ritorno    +863.0 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 70: 129 step · ritorno   +1079.6 · errore +0.0084 · leva -0.051 · RIUSCITO
+  ep 71:  82 step · ritorno    +942.8 · errore +0.0087 · leva -0.032 · RIUSCITO
+  ep 72: 140 step · ritorno    +706.7 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 73: 121 step · ritorno    +800.8 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 74: 122 step · ritorno   +1077.2 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 75: 129 step · ritorno    +544.8 · errore -0.0045 · leva +0.067 · RIUSCITO
+  ep 76: 130 step · ritorno   +1064.0 · errore +0.0083 · leva -0.036 · RIUSCITO
+  ep 77: 129 step · ritorno    +598.8 · errore -0.0002 · leva -0.110 · RIUSCITO
+  ep 78: 123 step · ritorno    +654.8 · errore +0.0030 · leva +0.078 · RIUSCITO
+  ep 79: 126 step · ritorno   +1065.7 · errore -0.0003 · leva -0.027 · RIUSCITO
+  ep 80: 124 step · ritorno   +1054.2 · errore +0.0078 · leva -0.058 · RIUSCITO
+  ep 81: 124 step · ritorno   +1078.9 · errore -0.0034 · leva -0.024 · RIUSCITO
+  ep 82: 120 step · ritorno   +1092.4 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 83: 141 step · ritorno    +558.6 · errore -0.0049 · leva -0.011 · RIUSCITO
+  ep 84: 143 step · ritorno   +1042.7 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 85: 128 step · ritorno   +1154.1 · errore -0.0039 · leva -0.026 · RIUSCITO
+  ep 86: 145 step · ritorno   +1067.8 · errore -0.0041 · leva -0.023 · RIUSCITO
+  ep 87: 173 step · ritorno    +639.0 · errore -0.0060 · leva -0.060 · RIUSCITO
+  ep 88: 140 step · ritorno    +847.0 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 89: 123 step · ritorno   +1122.4 · errore -0.0033 · leva -0.025 · RIUSCITO
+  ep 90: 124 step · ritorno   +1075.7 · errore +0.0089 · leva -0.034 · RIUSCITO
+  ep 91: 143 step · ritorno   +1061.4 · errore +0.0084 · leva -0.034 · RIUSCITO
+  ep 92: 121 step · ritorno    +570.5 · errore +0.0006 · leva -0.047 · RIUSCITO
+  ep 93: 600 step · ritorno    -350.4 · errore +0.2801 · leva +1.572 · no
+  ep 94:  80 step · ritorno   +1069.5 · errore -0.0039 · leva -0.024 · RIUSCITO
+  ep 95: 126 step · ritorno   +1051.4 · errore +0.0083 · leva -0.108 · RIUSCITO
+  ep 96: 125 step · ritorno   +1122.0 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 97: 260 step · ritorno    +496.3 · errore +0.0066 · leva -0.022 · RIUSCITO
+  ep 98: 129 step · ritorno   +1107.5 · errore +0.0084 · leva -0.078 · RIUSCITO
+  ep 99: 119 step · ritorno   +1111.1 · errore +0.0031 · leva -0.017 · RIUSCITO
+  ep 100: 133 step · ritorno    +331.7 · errore +0.0084 · leva -0.025 · RIUSCITO
+  ep 101: 164 step · ritorno    +510.4 · errore +0.0083 · leva -0.007 · RIUSCITO
+  ep 102: 122 step · ritorno   +1154.2 · errore -0.0033 · leva -0.024 · RIUSCITO
+  ep 103: 127 step · ritorno   +1145.6 · errore -0.0034 · leva -0.024 · RIUSCITO
+  ep 104: 124 step · ritorno   +1140.3 · errore -0.0030 · leva -0.025 · RIUSCITO
+  ep 105: 134 step · ritorno   +1043.6 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 106: 126 step · ritorno   +1126.7 · errore -0.0037 · leva -0.024 · RIUSCITO
+  ep 107: 126 step · ritorno    +632.1 · errore -0.0060 · leva +0.117 · RIUSCITO
+  ep 108: 121 step · ritorno   +1154.4 · errore -0.0004 · leva -0.024 · RIUSCITO
+  ep 109: 179 step · ritorno    +845.3 · errore -0.0060 · leva -0.108 · RIUSCITO
+  ep 110: 306 step · ritorno    +420.9 · errore +0.0020 · leva -0.026 · RIUSCITO
+  ep 111: 128 step · ritorno   +1074.9 · errore -0.0038 · leva -0.026 · RIUSCITO
+  ep 112: 131 step · ritorno   +1042.1 · errore +0.0087 · leva -0.109 · RIUSCITO
+  ep 113: 134 step · ritorno    +863.4 · errore -0.0060 · leva -0.032 · RIUSCITO
+  ep 114: 143 step · ritorno   +1071.6 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 115: 137 step · ritorno   +1000.4 · errore +0.0087 · leva -0.031 · RIUSCITO
+  ep 116: 143 step · ritorno    +745.6 · errore -0.0025 · leva -0.026 · RIUSCITO
+  ep 117: 179 step · ritorno    +922.5 · errore -0.0060 · leva -0.009 · RIUSCITO
+  ep 118: 135 step · ritorno    +520.6 · errore +0.0029 · leva -0.056 · RIUSCITO
+  ep 119: 341 step · ritorno    +796.3 · errore -0.0060 · leva +1.674 · quasi
+  ep 120: 188 step · ritorno    +851.8 · errore +0.0087 · leva -0.025 · RIUSCITO
+  ep 121: 130 step · ritorno   +1081.1 · errore -0.0040 · leva -0.025 · RIUSCITO
+  ep 122: 143 step · ritorno   +1029.0 · errore -0.0059 · leva +0.081 · RIUSCITO
+  ep 123: 266 step · ritorno    +811.0 · errore +0.0122 · leva +0.724 · quasi
+  ep 124: 122 step · ritorno    +775.0 · errore +0.0087 · leva -0.026 · RIUSCITO
+  ep 125: 138 step · ritorno   +1089.0 · errore -0.0060 · leva +0.028 · RIUSCITO
+  ep 126: 145 step · ritorno    +794.0 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 127: 127 step · ritorno   +1045.7 · errore +0.0087 · leva -0.046 · RIUSCITO
+  ep 128: 132 step · ritorno   +1016.3 · errore -0.0036 · leva -0.026 · RIUSCITO
+  ep 129: 377 step · ritorno    +469.3 · errore -0.0060 · leva +0.012 · RIUSCITO
+  ep 130: 204 step · ritorno    +613.1 · errore -0.0060 · leva -0.018 · RIUSCITO
+  ep 131: 452 step · ritorno    +264.7 · errore -0.0060 · leva -0.024 · RIUSCITO
+  ep 132: 150 step · ritorno    +717.5 · errore -0.0060 · leva -0.058 · RIUSCITO
+  ep 133: 151 step · ritorno    +768.9 · errore -0.0031 · leva -0.027 · RIUSCITO
+  ep 134:  80 step · ritorno   +1076.9 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 135: 202 step · ritorno    +160.2 · errore -0.0060 · leva -0.083 · RIUSCITO
+  ep 136:  83 step · ritorno    +987.9 · errore +0.0039 · leva +0.000 · RIUSCITO
+  ep 137: 140 step · ritorno    +981.7 · errore +0.0012 · leva -0.027 · RIUSCITO
+  ep 138: 139 step · ritorno    +991.4 · errore -0.0027 · leva -0.027 · RIUSCITO
+  ep 139: 138 step · ritorno    +822.6 · errore +0.0078 · leva -0.046 · RIUSCITO
+  ep 140: 118 step · ritorno   +1073.4 · errore -0.0023 · leva +0.009 · RIUSCITO
+  ep 141:  82 step · ritorno    +939.9 · errore +0.0062 · leva -0.026 · RIUSCITO
+  ep 142: 136 step · ritorno    +654.1 · errore +0.0084 · leva -0.044 · RIUSCITO
+  ep 143: 141 step · ritorno    +777.8 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 144: 121 step · ritorno   +1016.7 · errore -0.0060 · leva +0.020 · RIUSCITO
+  ep 145: 131 step · ritorno   +1010.5 · errore +0.0007 · leva -0.075 · RIUSCITO
+  ep 146: 127 step · ritorno    +552.0 · errore +0.0056 · leva -0.113 · RIUSCITO
+  ep 147: 120 step · ritorno   +1070.7 · errore -0.0035 · leva -0.025 · RIUSCITO
+  ep 148: 137 step · ritorno    +545.3 · errore +0.0084 · leva -0.025 · RIUSCITO
+  ep 149: 136 step · ritorno    +942.9 · errore +0.0066 · leva -0.029 · RIUSCITO
+  ep 150: 127 step · ritorno    +989.3 · errore +0.0089 · leva +0.079 · RIUSCITO
+  ep 151: 143 step · ritorno    +704.6 · errore -0.0059 · leva +0.118 · RIUSCITO
+  ep 152: 128 step · ritorno   +1019.2 · errore +0.0014 · leva -0.042 · RIUSCITO
+  ep 153: 174 step · ritorno    +862.2 · errore -0.0060 · leva +0.139 · RIUSCITO
+  ep 154: 186 step · ritorno    +917.4 · errore -0.0060 · leva -0.040 · RIUSCITO
+  ep 155: 138 step · ritorno    +719.6 · errore +0.0067 · leva -0.089 · RIUSCITO
+  ep 156: 123 step · ritorno    +493.5 · errore -0.0042 · leva +0.138 · RIUSCITO
+  ep 157: 145 step · ritorno    +630.9 · errore +0.0057 · leva -0.057 · RIUSCITO
+  ep 158:  81 step · ritorno    +974.9 · errore -0.0040 · leva -0.025 · RIUSCITO
+  ep 159: 140 step · ritorno    +874.5 · errore +0.0075 · leva -0.018 · RIUSCITO
+  ep 160: 122 step · ritorno   +1145.5 · errore -0.0035 · leva -0.025 · RIUSCITO
+  ep 161: 152 step · ritorno    +847.1 · errore -0.0060 · leva -0.025 · RIUSCITO
+  ep 162: 126 step · ritorno   +1120.9 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 163: 127 step · ritorno    +980.1 · errore +0.0083 · leva -0.088 · RIUSCITO
+  ep 164: 119 step · ritorno    +862.0 · errore -0.0035 · leva -0.022 · RIUSCITO
+  ep 165: 141 step · ritorno    +471.3 · errore -0.0060 · leva -0.083 · RIUSCITO
+  ep 166: 133 step · ritorno    +983.8 · errore +0.0085 · leva -0.064 · RIUSCITO
+  ep 167: 130 step · ritorno    +395.4 · errore -0.0060 · leva +0.073 · RIUSCITO
+  ep 168: 132 step · ritorno   +1032.0 · errore +0.0079 · leva -0.081 · RIUSCITO
+  ep 169:  81 step · ritorno   +1018.2 · errore +0.0085 · leva -0.031 · RIUSCITO
+  ep 170:  80 step · ritorno   +1006.1 · errore -0.0046 · leva -0.009 · RIUSCITO
+  ep 171: 133 step · ritorno    +994.2 · errore +0.0079 · leva -0.031 · RIUSCITO
+  ep 172: 170 step · ritorno    +745.5 · errore +0.0057 · leva -0.024 · RIUSCITO
+  ep 173: 133 step · ritorno   +1011.2 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 174: 130 step · ritorno   +1079.4 · errore -0.0060 · leva -0.042 · RIUSCITO
+  ep 175: 600 step · ritorno    -169.3 · errore +0.1764 · leva -0.033 · no
+  ep 176: 127 step · ritorno   +1077.8 · errore +0.0089 · leva -0.058 · RIUSCITO
+  ep 177: 133 step · ritorno    +412.6 · errore -0.0008 · leva +0.118 · RIUSCITO
+  ep 178: 123 step · ritorno    +570.0 · errore +0.0072 · leva +0.075 · RIUSCITO
+  ep 179: 141 step · ritorno    +758.8 · errore -0.0031 · leva -0.026 · RIUSCITO
+  ep 180: 124 step · ritorno   +1041.5 · errore +0.0083 · leva -0.056 · RIUSCITO
+  ep 181: 129 step · ritorno    +557.0 · errore -0.0060 · leva -0.025 · RIUSCITO
+  ep 182: 118 step · ritorno    +732.1 · errore -0.0040 · leva -0.025 · RIUSCITO
+  ep 183: 142 step · ritorno   +1041.1 · errore +0.0087 · leva -0.014 · RIUSCITO
+  ep 184: 143 step · ritorno    +708.7 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 185: 126 step · ritorno   +1012.6 · errore -0.0007 · leva -0.020 · RIUSCITO
+  ep 186: 135 step · ritorno   +1027.9 · errore +0.0075 · leva -0.088 · RIUSCITO
+  ep 187: 138 step · ritorno   +1074.7 · errore -0.0037 · leva -0.025 · RIUSCITO
+  ep 188: 123 step · ritorno   +1129.3 · errore -0.0040 · leva -0.025 · RIUSCITO
+  ep 189: 155 step · ritorno    +503.3 · errore -0.0058 · leva -0.123 · RIUSCITO
+  ep 190: 144 step · ritorno    +501.6 · errore +0.0084 · leva -0.025 · RIUSCITO
+  ep 191: 126 step · ritorno    +786.9 · errore +0.0080 · leva -0.022 · RIUSCITO
+  ep 192: 119 step · ritorno   +1054.9 · errore -0.0048 · leva +0.013 · RIUSCITO
+  ep 193: 119 step · ritorno   +1078.7 · errore -0.0030 · leva -0.024 · RIUSCITO
+  ep 194: 131 step · ritorno   +1082.1 · errore +0.0085 · leva -0.029 · RIUSCITO
+  ep 195: 155 step · ritorno    +809.2 · errore +0.0004 · leva -0.010 · RIUSCITO
+  ep 196: 127 step · ritorno   +1066.7 · errore -0.0000 · leva +0.030 · RIUSCITO
+  ep 197: 138 step · ritorno   +1141.4 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 198: 142 step · ritorno    +973.7 · errore +0.0013 · leva -0.023 · RIUSCITO
+  ep 199: 137 step · ritorno   +1040.6 · errore +0.0033 · leva -0.028 · RIUSCITO
+
+metriche §8 · seme 101:
+  successo_permissivo        0.99
+  success_rate               0.98
+  successo_pulito            0.96
+  true_IC95                  [0.950, 0.992]
+  pulito_IC95                [0.923, 0.980]
+  ritiro_spostamento_medio   0.18923912812862562
+  errore_medio_con_segno     0.0022807298415008347
+  errore_medio_assoluto      0.0071277716824963274
+  ritorno_medio              890.7779311139224
+  passi_medi                 141.895
+  n_episodi                  200
+
+─── seme di valutazione 7 · 200 episodi ───
+  ep 0: 143 step · ritorno    +827.4 · errore -0.0060 · leva +0.140 · RIUSCITO
+  ep 1: 138 step · ritorno    +838.4 · errore -0.0060 · leva -0.055 · RIUSCITO
+  ep 2: 141 step · ritorno    +695.9 · errore -0.0060 · leva +0.041 · RIUSCITO
+  ep 3: 123 step · ritorno   +1081.3 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 4: 131 step · ritorno   +1079.2 · errore -0.0040 · leva -0.025 · RIUSCITO
+  ep 5: 133 step · ritorno    +799.4 · errore +0.0073 · leva -0.022 · RIUSCITO
+  ep 6:  80 step · ritorno    +985.6 · errore -0.0004 · leva +0.003 · RIUSCITO
+  ep 7: 132 step · ritorno    +776.8 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 8: 118 step · ritorno   +1108.4 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 9: 142 step · ritorno    +957.8 · errore -0.0060 · leva -0.039 · RIUSCITO
+  ep 10: 141 step · ritorno    +504.6 · errore +0.0081 · leva -0.030 · RIUSCITO
+  ep 11: 136 step · ritorno    +625.4 · errore +0.0085 · leva -0.025 · RIUSCITO
+  ep 12: 158 step · ritorno    +707.4 · errore -0.0060 · leva +0.054 · RIUSCITO
+  ep 13: 129 step · ritorno   +1107.5 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 14: 145 step · ritorno    +762.8 · errore -0.0014 · leva -0.026 · RIUSCITO
+  ep 15: 340 step · ritorno    +546.6 · errore -0.0060 · leva +0.120 · RIUSCITO
+  ep 16: 123 step · ritorno   +1054.4 · errore -0.0027 · leva -0.025 · RIUSCITO
+  ep 17: 119 step · ritorno   +1129.5 · errore -0.0037 · leva -0.023 · RIUSCITO
+  ep 18: 126 step · ritorno   +1089.7 · errore -0.0016 · leva -0.067 · RIUSCITO
+  ep 19: 263 step · ritorno    +662.3 · errore -0.0060 · leva -0.025 · RIUSCITO
+  ep 20: 130 step · ritorno   +1056.9 · errore +0.0088 · leva -0.115 · RIUSCITO
+  ep 21: 124 step · ritorno   +1046.4 · errore +0.0078 · leva -0.028 · RIUSCITO
+  ep 22: 140 step · ritorno   +1053.0 · errore -0.0008 · leva -0.009 · RIUSCITO
+  ep 23: 220 step · ritorno    +841.3 · errore -0.0038 · leva +0.015 · RIUSCITO
+  ep 24: 159 step · ritorno   +1014.2 · errore -0.0060 · leva -0.011 · RIUSCITO
+  ep 25: 131 step · ritorno   +1136.6 · errore -0.0002 · leva -0.020 · RIUSCITO
+  ep 26: 138 step · ritorno    +518.9 · errore +0.0067 · leva -0.080 · RIUSCITO
+  ep 27: 138 step · ritorno    +430.5 · errore -0.0010 · leva -0.019 · RIUSCITO
+  ep 28: 219 step · ritorno    +778.8 · errore +0.0067 · leva -0.106 · RIUSCITO
+  ep 29: 600 step · ritorno    -284.3 · errore +0.0547 · leva +1.284 · no
+  ep 30: 120 step · ritorno   +1123.8 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 31: 141 step · ritorno   +1051.5 · errore -0.0038 · leva -0.026 · RIUSCITO
+  ep 32: 123 step · ritorno   +1052.9 · errore +0.0064 · leva -0.112 · RIUSCITO
+  ep 33: 139 step · ritorno    +987.4 · errore +0.0041 · leva -0.023 · RIUSCITO
+  ep 34: 136 step · ritorno   +1019.0 · errore +0.0024 · leva -0.027 · RIUSCITO
+  ep 35: 160 step · ritorno    +928.2 · errore -0.0046 · leva -0.095 · RIUSCITO
+  ep 36: 142 step · ritorno   +1014.7 · errore -0.0015 · leva -0.026 · RIUSCITO
+  ep 37: 180 step · ritorno    +727.3 · errore -0.0052 · leva +0.078 · RIUSCITO
+  ep 38: 118 step · ritorno   +1188.6 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 39: 128 step · ritorno   +1098.0 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 40: 135 step · ritorno    +775.9 · errore +0.0082 · leva -0.047 · RIUSCITO
+  ep 41: 135 step · ritorno    +717.1 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 42: 127 step · ritorno    +492.9 · errore -0.0021 · leva +0.113 · RIUSCITO
+  ep 43: 135 step · ritorno   +1117.7 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 44: 135 step · ritorno   +1105.2 · errore -0.0025 · leva -0.022 · RIUSCITO
+  ep 45: 123 step · ritorno   +1068.8 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 46: 137 step · ritorno   +1049.8 · errore +0.0039 · leva -0.018 · RIUSCITO
+  ep 47: 140 step · ritorno   +1014.9 · errore +0.0081 · leva -0.029 · RIUSCITO
+  ep 48: 148 step · ritorno    +771.8 · errore -0.0038 · leva -0.023 · RIUSCITO
+  ep 49: 118 step · ritorno   +1068.0 · errore -0.0033 · leva -0.025 · RIUSCITO
+  ep 50: 125 step · ritorno    +700.3 · errore -0.0051 · leva -0.044 · RIUSCITO
+  ep 51: 126 step · ritorno   +1015.6 · errore +0.0089 · leva -0.034 · RIUSCITO
+  ep 52: 128 step · ritorno   +1037.8 · errore +0.0056 · leva -0.025 · RIUSCITO
+  ep 53: 131 step · ritorno    +969.4 · errore +0.0084 · leva -0.045 · RIUSCITO
+  ep 54: 120 step · ritorno   +1102.9 · errore +0.0019 · leva -0.024 · RIUSCITO
+  ep 55: 157 step · ritorno    +510.6 · errore +0.0086 · leva -0.025 · RIUSCITO
+  ep 56: 121 step · ritorno   +1101.2 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 57: 132 step · ritorno   +1040.7 · errore +0.0020 · leva -0.027 · RIUSCITO
+  ep 58: 141 step · ritorno    +790.8 · errore +0.0049 · leva +0.010 · RIUSCITO
+  ep 59: 146 step · ritorno    +765.2 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 60:  83 step · ritorno    +954.0 · errore -0.0040 · leva -0.020 · RIUSCITO
+  ep 61: 160 step · ritorno   +1023.7 · errore -0.0060 · leva +0.043 · RIUSCITO
+  ep 62: 208 step · ritorno    +950.6 · errore -0.0060 · leva -0.038 · RIUSCITO
+  ep 63:  81 step · ritorno   +1011.3 · errore -0.0060 · leva -0.044 · RIUSCITO
+  ep 64: 131 step · ritorno   +1000.9 · errore -0.0031 · leva -0.027 · RIUSCITO
+  ep 65: 143 step · ritorno    +845.3 · errore +0.0081 · leva +0.012 · RIUSCITO
+  ep 66: 139 step · ritorno   +1081.4 · errore +0.0051 · leva -0.028 · RIUSCITO
+  ep 67: 133 step · ritorno    +820.8 · errore +0.0088 · leva -0.033 · RIUSCITO
+  ep 68: 125 step · ritorno    +562.9 · errore +0.0075 · leva -0.064 · RIUSCITO
+  ep 69: 136 step · ritorno   +1020.5 · errore +0.0024 · leva -0.021 · RIUSCITO
+  ep 70: 355 step · ritorno    +321.9 · errore +0.0085 · leva -0.025 · RIUSCITO
+  ep 71: 132 step · ritorno    +477.2 · errore +0.0013 · leva -0.107 · RIUSCITO
+  ep 72: 124 step · ritorno   +1037.0 · errore +0.0008 · leva -0.019 · RIUSCITO
+  ep 73: 132 step · ritorno   +1081.5 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 74: 131 step · ritorno   +1054.7 · errore +0.0083 · leva -0.065 · RIUSCITO
+  ep 75: 137 step · ritorno   +1000.8 · errore +0.0074 · leva -0.028 · RIUSCITO
+  ep 76: 140 step · ritorno   +1076.7 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 77: 146 step · ritorno    +819.6 · errore +0.0059 · leva -0.025 · RIUSCITO
+  ep 78: 125 step · ritorno   +1073.8 · errore +0.0087 · leva -0.061 · RIUSCITO
+  ep 79: 145 step · ritorno   +1069.2 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 80: 119 step · ritorno   +1162.7 · errore -0.0031 · leva -0.026 · RIUSCITO
+  ep 81: 135 step · ritorno   +1009.4 · errore -0.0056 · leva +0.046 · RIUSCITO
+  ep 82: 132 step · ritorno   +1046.3 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 83: 160 step · ritorno    +722.7 · errore -0.0060 · leva -0.017 · RIUSCITO
+  ep 84: 144 step · ritorno    +824.5 · errore -0.0060 · leva -0.069 · RIUSCITO
+  ep 85: 119 step · ritorno   +1082.9 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 86: 135 step · ritorno   +1054.6 · errore +0.0088 · leva -0.031 · RIUSCITO
+  ep 87: 124 step · ritorno   +1058.5 · errore +0.0077 · leva -0.099 · RIUSCITO
+  ep 88: 127 step · ritorno    +760.2 · errore -0.0015 · leva -0.008 · RIUSCITO
+  ep 89: 141 step · ritorno   +1061.0 · errore -0.0028 · leva +0.128 · RIUSCITO
+  ep 90: 123 step · ritorno   +1132.5 · errore -0.0030 · leva -0.024 · RIUSCITO
+  ep 91: 135 step · ritorno   +1070.7 · errore -0.0022 · leva +0.017 · RIUSCITO
+  ep 92: 119 step · ritorno   +1094.0 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 93: 131 step · ritorno   +1047.6 · errore +0.0084 · leva -0.050 · RIUSCITO
+  ep 94: 125 step · ritorno   +1098.8 · errore -0.0028 · leva -0.026 · RIUSCITO
+  ep 95: 128 step · ritorno   +1153.6 · errore -0.0039 · leva -0.025 · RIUSCITO
+  ep 96: 206 step · ritorno    +749.5 · errore -0.0060 · leva -0.025 · RIUSCITO
+  ep 97: 121 step · ritorno    +555.1 · errore +0.0005 · leva -0.040 · RIUSCITO
+  ep 98: 152 step · ritorno    +860.7 · errore -0.0060 · leva +0.054 · RIUSCITO
+  ep 99: 148 step · ritorno    +362.6 · errore -0.0060 · leva -0.039 · RIUSCITO
+  ep 100: 146 step · ritorno    +766.2 · errore -0.0030 · leva -0.026 · RIUSCITO
+  ep 101: 135 step · ritorno    +676.6 · errore +0.0078 · leva -0.027 · RIUSCITO
+  ep 102: 127 step · ritorno   +1085.2 · errore +0.0088 · leva -0.032 · RIUSCITO
+  ep 103: 143 step · ritorno    +858.5 · errore -0.0029 · leva -0.026 · RIUSCITO
+  ep 104: 129 step · ritorno   +1034.5 · errore +0.0086 · leva -0.068 · RIUSCITO
+  ep 105: 129 step · ritorno   +1063.8 · errore +0.0041 · leva -0.103 · RIUSCITO
+  ep 106: 162 step · ritorno    +867.7 · errore -0.0041 · leva +0.061 · RIUSCITO
+  ep 107: 167 step · ritorno    +784.9 · errore -0.0060 · leva -0.023 · RIUSCITO
+  ep 108: 130 step · ritorno   +1052.5 · errore +0.0060 · leva -0.029 · RIUSCITO
+  ep 109: 129 step · ritorno    +441.1 · errore -0.0004 · leva +0.089 · RIUSCITO
+  ep 110: 133 step · ritorno   +1062.6 · errore -0.0001 · leva -0.114 · RIUSCITO
+  ep 111: 124 step · ritorno   +1137.3 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 112: 123 step · ritorno   +1100.5 · errore +0.0006 · leva -0.023 · RIUSCITO
+  ep 113: 120 step · ritorno   +1072.0 · errore -0.0041 · leva -0.023 · RIUSCITO
+  ep 114: 137 step · ritorno    +772.8 · errore -0.0026 · leva -0.026 · RIUSCITO
+  ep 115: 146 step · ritorno    +692.5 · errore -0.0019 · leva -0.027 · RIUSCITO
+  ep 116: 139 step · ritorno   +1113.4 · errore -0.0037 · leva -0.025 · RIUSCITO
+  ep 117: 138 step · ritorno   +1039.4 · errore -0.0060 · leva -0.026 · RIUSCITO
+  ep 118:  80 step · ritorno    +993.6 · errore +0.0060 · leva -0.115 · RIUSCITO
+  ep 119: 142 step · ritorno    +841.8 · errore -0.0060 · leva -0.018 · RIUSCITO
+  ep 120: 127 step · ritorno   +1035.6 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 121: 128 step · ritorno    +993.8 · errore -0.0009 · leva +0.014 · RIUSCITO
+  ep 122: 137 step · ritorno    +684.8 · errore +0.0086 · leva -0.025 · RIUSCITO
+  ep 123: 136 step · ritorno    +922.5 · errore +0.0048 · leva -0.046 · RIUSCITO
+  ep 124: 127 step · ritorno   +1080.2 · errore -0.0060 · leva -0.082 · RIUSCITO
+  ep 125: 124 step · ritorno   +1199.9 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 126:  80 step · ritorno    +980.3 · errore +0.0053 · leva -0.026 · RIUSCITO
+  ep 127:  81 step · ritorno    +908.1 · errore +0.0055 · leva -0.010 · RIUSCITO
+  ep 128: 125 step · ritorno   +1083.0 · errore -0.0036 · leva -0.025 · RIUSCITO
+  ep 129: 138 step · ritorno   +1003.0 · errore -0.0031 · leva -0.026 · RIUSCITO
+  ep 130: 122 step · ritorno    +992.2 · errore +0.0017 · leva -0.043 · RIUSCITO
+  ep 131: 124 step · ritorno   +1102.8 · errore -0.0038 · leva -0.023 · RIUSCITO
+  ep 132: 135 step · ritorno   +1049.9 · errore +0.0084 · leva -0.108 · RIUSCITO
+  ep 133: 132 step · ritorno   +1051.1 · errore -0.0013 · leva +0.011 · RIUSCITO
+  ep 134: 119 step · ritorno   +1126.5 · errore -0.0034 · leva -0.023 · RIUSCITO
+  ep 135:  82 step · ritorno   +1034.5 · errore +0.0040 · leva -0.025 · RIUSCITO
+  ep 136: 133 step · ritorno    +763.6 · errore -0.0044 · leva -0.016 · RIUSCITO
+  ep 137: 137 step · ritorno    +966.7 · errore -0.0028 · leva -0.026 · RIUSCITO
+  ep 138: 131 step · ritorno    +780.1 · errore +0.0081 · leva -0.027 · RIUSCITO
+  ep 139: 124 step · ritorno    +785.1 · errore -0.0060 · leva -0.083 · RIUSCITO
+  ep 140: 126 step · ritorno   +1097.5 · errore -0.0035 · leva -0.022 · RIUSCITO
+  ep 141: 119 step · ritorno    +773.8 · errore -0.0044 · leva -0.018 · RIUSCITO
+  ep 142: 124 step · ritorno   +1005.5 · errore -0.0033 · leva -0.026 · RIUSCITO
+  ep 143: 123 step · ritorno   +1107.4 · errore +0.0034 · leva -0.023 · RIUSCITO
+  ep 144: 124 step · ritorno   +1074.4 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 145: 138 step · ritorno   +1083.5 · errore +0.0090 · leva -0.027 · RIUSCITO
+  ep 146: 132 step · ritorno    +841.8 · errore -0.0060 · leva -0.127 · RIUSCITO
+  ep 147: 126 step · ritorno    +669.1 · errore -0.0031 · leva -0.024 · RIUSCITO
+  ep 148: 127 step · ritorno   +1096.7 · errore +0.0085 · leva -0.034 · RIUSCITO
+  ep 149: 127 step · ritorno   +1071.2 · errore +0.0082 · leva -0.037 · RIUSCITO
+  ep 150: 118 step · ritorno   +1088.0 · errore -0.0042 · leva -0.010 · RIUSCITO
+  ep 151: 125 step · ritorno    +738.4 · errore +0.0065 · leva -0.064 · RIUSCITO
+  ep 152: 120 step · ritorno   +1157.1 · errore -0.0033 · leva -0.024 · RIUSCITO
+  ep 153: 119 step · ritorno   +1089.0 · errore +0.0007 · leva -0.010 · RIUSCITO
+  ep 154: 119 step · ritorno   +1139.0 · errore -0.0044 · leva -0.017 · RIUSCITO
+  ep 155: 141 step · ritorno    +822.0 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 156:  83 step · ritorno   +1015.0 · errore -0.0045 · leva -0.013 · RIUSCITO
+  ep 157: 137 step · ritorno    +680.3 · errore +0.0052 · leva -0.021 · RIUSCITO
+  ep 158: 126 step · ritorno   +1089.7 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 159: 130 step · ritorno   +1071.3 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 160: 119 step · ritorno   +1123.5 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 161:  83 step · ritorno    +969.0 · errore -0.0043 · leva -0.020 · RIUSCITO
+  ep 162: 158 step · ritorno    +835.3 · errore -0.0060 · leva -0.029 · RIUSCITO
+  ep 163: 137 step · ritorno    +863.0 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 164: 129 step · ritorno   +1079.6 · errore +0.0084 · leva -0.051 · RIUSCITO
+  ep 165:  82 step · ritorno    +942.8 · errore +0.0087 · leva -0.032 · RIUSCITO
+  ep 166: 140 step · ritorno    +706.7 · errore -0.0035 · leva -0.026 · RIUSCITO
+  ep 167: 121 step · ritorno    +800.8 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 168: 122 step · ritorno   +1077.2 · errore -0.0042 · leva -0.022 · RIUSCITO
+  ep 169: 129 step · ritorno    +544.8 · errore -0.0045 · leva +0.067 · RIUSCITO
+  ep 170: 130 step · ritorno   +1064.0 · errore +0.0083 · leva -0.036 · RIUSCITO
+  ep 171: 129 step · ritorno    +598.8 · errore -0.0002 · leva -0.110 · RIUSCITO
+  ep 172: 123 step · ritorno    +654.8 · errore +0.0030 · leva +0.078 · RIUSCITO
+  ep 173: 126 step · ritorno   +1065.7 · errore -0.0003 · leva -0.027 · RIUSCITO
+  ep 174: 124 step · ritorno   +1054.2 · errore +0.0078 · leva -0.058 · RIUSCITO
+  ep 175: 124 step · ritorno   +1078.9 · errore -0.0034 · leva -0.024 · RIUSCITO
+  ep 176: 120 step · ritorno   +1092.4 · errore -0.0032 · leva -0.026 · RIUSCITO
+  ep 177: 141 step · ritorno    +558.6 · errore -0.0049 · leva -0.011 · RIUSCITO
+  ep 178: 143 step · ritorno   +1042.7 · errore -0.0034 · leva -0.026 · RIUSCITO
+  ep 179: 128 step · ritorno   +1154.1 · errore -0.0039 · leva -0.026 · RIUSCITO
+  ep 180: 145 step · ritorno   +1067.8 · errore -0.0041 · leva -0.023 · RIUSCITO
+  ep 181: 173 step · ritorno    +639.0 · errore -0.0060 · leva -0.060 · RIUSCITO
+  ep 182: 140 step · ritorno    +847.0 · errore -0.0037 · leva -0.026 · RIUSCITO
+  ep 183: 123 step · ritorno   +1122.4 · errore -0.0033 · leva -0.025 · RIUSCITO
+  ep 184: 124 step · ritorno   +1075.7 · errore +0.0089 · leva -0.034 · RIUSCITO
+  ep 185: 143 step · ritorno   +1061.4 · errore +0.0084 · leva -0.034 · RIUSCITO
+  ep 186: 121 step · ritorno    +570.5 · errore +0.0006 · leva -0.047 · RIUSCITO
+  ep 187: 600 step · ritorno    -350.4 · errore +0.2801 · leva +1.572 · no
+  ep 188:  80 step · ritorno   +1069.5 · errore -0.0039 · leva -0.024 · RIUSCITO
+  ep 189: 126 step · ritorno   +1051.4 · errore +0.0083 · leva -0.108 · RIUSCITO
+  ep 190: 125 step · ritorno   +1122.0 · errore -0.0034 · leva -0.025 · RIUSCITO
+  ep 191: 260 step · ritorno    +496.3 · errore +0.0066 · leva -0.022 · RIUSCITO
+  ep 192: 129 step · ritorno   +1107.5 · errore +0.0084 · leva -0.078 · RIUSCITO
+  ep 193: 119 step · ritorno   +1111.1 · errore +0.0031 · leva -0.017 · RIUSCITO
+  ep 194: 133 step · ritorno    +331.7 · errore +0.0084 · leva -0.025 · RIUSCITO
+  ep 195: 164 step · ritorno    +510.4 · errore +0.0083 · leva -0.007 · RIUSCITO
+  ep 196: 122 step · ritorno   +1154.2 · errore -0.0033 · leva -0.024 · RIUSCITO
+  ep 197: 127 step · ritorno   +1145.6 · errore -0.0034 · leva -0.024 · RIUSCITO
+  ep 198: 124 step · ritorno   +1140.3 · errore -0.0030 · leva -0.025 · RIUSCITO
+  ep 199: 134 step · ritorno   +1043.6 · errore -0.0033 · leva -0.026 · RIUSCITO
+
+metriche §8 · seme 7:
+  successo_permissivo        0.99
+  success_rate               0.99
+  successo_pulito            0.975
+  true_IC95                  [0.964, 0.997]
+  pulito_IC95                [0.943, 0.989]
+  ritiro_spostamento_medio   0.19063895930967206
+  errore_medio_con_segno     0.001586228777087117
+  errore_medio_assoluto      0.006285091463147734
+  ritorno_medio              919.3372688259615
+  passi_medi                 139.81
+  n_episodi                  200
+
+═══ TUTTI I SEMI UNITI · 600 episodi ═══
+  successo_permissivo        0.9916666666666667
+  success_rate               0.985
+  successo_pulito            0.97
+  true_IC95                  [0.972, 0.992]
+  pulito_IC95                [0.953, 0.981]
+  ritiro_spostamento_medio   0.19037810590922835
+  errore_medio_con_segno     0.0017050973021129382
+  errore_medio_assoluto      0.00651921151953442
+  ritorno_medio              908.9341383478672
+  passi_medi                 141.06333333333333
+  n_episodi                  600
+
+└─[ Error, check your command]> mjpython train_unified.py --task close --play
+
+compito: chiusura_v2_curr1
+  θ* = (0.015, 0.015) della corsa   ·   θ₀ = (0.7, 1.0)
+  tol = 0.03 rad   ·   T_hold = 2.0 s
+  d_ret = 0.13 m · z_ret = 0.04 m · normale diretta
+  controllori: riporto leva = False · escape = False
+  SAC invariato (§6): rete (512, 512), lr 0.0003, γ 0.95, target entropy -3.0
+  budget di progresso: 700.0 su tutta l'escursione
+
+[robosuite WARNING] No private macro file found! (macros.py:53)
+[robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[robosuite WARNING] To setup, run: python /Users/simone/workspace/FrankaPandaRL/.venv/lib/python3.10/site-packages/robosuite/scripts/setup_macros.py (macros.py:55)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly, otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+  >>> step  17  REACH -> MOVE   | fase chiusa: 16 step, R -32.0   | approach -25.7 · wrist -3.0 · phi +1.7 · grip -1.7 · time -1.6
+  >>> step  35  MOVE -> HOLD   | fase chiusa: 18 step, R +577.0   | progress +567.7 · success +10.0 · contact +4.3 · time -1.8 · approach -1.7
+  >>> step  95  HOLD -> RELEASE   | fase chiusa: 60 step, R +65.6   | hold_grip +60.0 · still +54.4 · target +48.9 · wrist -38.8 · phi -30.5
+  >>> step 125  RELEASE -> FINE   | fase chiusa: 30 step, R -111.1   | retreat -153.5 · release +56.2 · target +24.4 · phi -18.0 · latch_home -15.8
+
+  --- reward machine dell'episodio (125 step, ritorno +1098.8) ---
+  fase       step         R   R/step   termini principali
+  REACH        16     -32.0    -2.00   approach -25.7 · wrist -3.0 · phi +1.7 · grip -1.7 · time -1.6
+  MOVE         18     577.0    32.06   progress +567.7 · success +10.0 · contact +4.3 · time -1.8 · approach -1.7
+  HOLD         60      65.6     1.09   hold_grip +60.0 · still +54.4 · target +48.9 · wrist -38.8 · phi -30.5
+  RELEASE      30    -111.1    -3.70   retreat -153.5 · release +56.2 · target +24.4 · phi -18.0 · latch_home -15.8
+  FINE          1     599.3   599.26   success +600.0 · phi -0.6 · time -0.1 · smooth -0.0
+  ------------------------------------------------------------------------
+  totale per termine: success +610.0 · progress +567.7 · retreat -153.5 · target +73.4 · hold_grip +60.0 · release +56.2 · still +54.4 · phi -47.7 · wrist -41.7 · approach -27.5 · damp -22.1 · latch_home -15.8 · time -12.5 · contact +4.3 · smooth -4.2 · grip -1.7 · approach_geom -0.6
+  ep 0: 125 step · ritorno   +1098.8 · errore -0.0028 · leva -0.026 · RIUSCITO
+
+metriche §8:
+  successo_permissivo        1.0
+  success_rate               1.0
+  successo_pulito            1.0
+  true_IC95                  [0.207, 1.000]
+  pulito_IC95                [0.207, 1.000]
+  ritiro_spostamento_medio   0.20356300197225408
+  errore_medio_con_segno     -0.0028283199802578906
+  errore_medio_assoluto      0.0028283199802578906
+  ritorno_medio              1098.7770246863365
+  passi_medi                 125.0
+  n_episodi                  1

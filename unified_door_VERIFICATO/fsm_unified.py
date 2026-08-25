@@ -66,6 +66,7 @@ class StatoFSM:
     passi_cala: int = 0           # guardia di stallo in HOLD: frame fuori tolleranza
     passi_a_bersaglio: int = 0    # frame consecutivi con A vera prima di HOLD
     passi_release: int = 0
+    uscita_pulita: bool = False   # §7 terminata per condizione, non per tetto duro
 
     prev_fase: Fase = Fase.REACH
 
@@ -244,6 +245,9 @@ class UnifiedFSM:
             pronto = (s.passi_release >= self.thr.retreat_target_steps
                       and door.A and abs(latch) <= self.thr.latch_term_tol)
             if pronto or s.passi_release >= self.thr.retreat_hard_cap:
+                # §7 — il clean success dell'originale richiede una terminazione
+                # PULITA: per condizione soddisfatta, non per tetto duro.
+                s.uscita_pulita = bool(pronto)
                 s.fase = Fase.FINE
 
         return s
