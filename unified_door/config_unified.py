@@ -190,6 +190,11 @@ class AdaptiveThresholds:
     # osservata. Non entrano in nessuna metrica.
     assestamento_max_passi: int = 90
     assestamento_vel_soglia: float = 0.05
+    # §9 — quanti secondi tenere ferma la posa finale prima di chiudere la
+    # scena. Serve perche' il VecEnv fa auto-reset appena l'episodio termina:
+    # senza questa pausa l'ultimo fotogramma visibile e' gia' quello
+    # dell'episodio successivo. Anche questa vale solo con `--play`.
+    assestamento_pausa_s: float = 3.0
     grasp_confirm_steps: int = 5         # REACH -> MOVE
     grasp_lose_steps: int = 3            # MOVE  -> REACH
     # §3 ISTERESI DELLA PRESA (close_generalized_v2/fsm_v2.py, ramo PHASE_PUSH,

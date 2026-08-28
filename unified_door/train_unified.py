@@ -204,9 +204,35 @@ FASI = ("REACH", "MOVE", "HOLD", "RELEASE", "FINE")
 CONTROLLORI = ("-", "C0 riporto leva", "C1 escape")
 
 
-def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0):
+def scena(env) -> str:
+    """§9 — la scena estratta dopo il reset: posa della porta e fisica campionate.
+
+    Serve al `--play` su piu' episodi: senza dichiararle, uno spettatore non ha
+    modo di sapere che porta e attrito cambiano a ogni episodio, e il robot
+    sembra ripetere sempre la stessa cosa. Sono gli stessi valori che entrano
+    nell'osservazione (raggio e attrito) e nel timer di HOLD (cricchetto).
+    """
+    g = env.envs[0] if hasattr(env, "envs") else None
+    if g is None or not hasattr(g, "door"):
+        return ""
+    amp = max(g.corsa_max - g.corsa_min, 1e-9)
+    f = lambda t: (t - g.corsa_min) / amp
+    r = g._rand
+    base = r.base_latch_stiffness or 1.0
+    return (f"  ── porta a {g.door.theta_zero:+.3f} rad ({100*f(g.door.theta_zero):.0f} % della corsa)"
+            f"  →  bersaglio {g.door.theta_star:+.3f} rad ({100*f(g.door.theta_star):.0f} %)\n"
+            f"     maniglia: raggio {r.current_handle_radius:.4f} m · attrito "
+            f"{r.current_handle_friction:.2f} · cricchetto ×{r.current_latch_stiffness/base:.2f}")
+
+
+def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0,
+             mostra_scena=False):
     """Esegue un episodio. Con `verboso` stampa transizioni e reward machine."""
     obs = env.reset()
+    if mostra_scena:
+        s = scena(env)
+        if s:
+            print(s)
     tot, passi, info = 0.0, 0, {}
     fase_prec, accum, per_fase = None, {}, {}
     while True:
@@ -241,7 +267,11 @@ def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0):
                       + (f" | mascherati: {','.join(masch)}" if masch else "")
                       + f"\n           " + " · ".join(f"{k} {v:+.2f}" for k, v in att))
         fase_prec = fase
-        if render:
+        if render and not done[0]:
+            # §9 — NON si disegna sull'ultimo passo. Il VecEnv ha gia' fatto
+            # auto-reset, quindi quel fotogramma mostrerebbe l'episodio
+            # SUCCESSIVO al posto della posa finale. I fotogrammi veri della
+            # fine li disegna `_assestamento`, dentro `step`, prima del reset.
             env.envs[0].render() if hasattr(env, "envs") else None
             if slow: time.sleep(slow / 30.0)
         if done[0]:
@@ -325,7 +355,8 @@ def main():
                     help="ogni N passi valuta e, se è la migliore, salva l'istantanea")
     ap.add_argument("--eval-episodi", type=int, default=10,
                     help="episodi deterministici per ogni valutazione periodica")
-    ap.add_argument("--episodes", type=int, default=20)
+    ap.add_argument("--episodes", type=int, default=None,
+                    help="episodi da eseguire: 1 con --play, 20 con --eval, se non indicato")
     ap.add_argument("--seed", type=int, default=101)
     ap.add_argument("--eval-seeds", type=str, default=None,
                     help="§8 semi di valutazione separati da virgola, es. 42,101,7")
@@ -348,13 +379,23 @@ def main():
     if args.play or args.eval:
         env, model = carica(cfg, args, render_mode="human" if args.play else None)
 
+        # §9 — la coda del play va disegnata allo STESSO ritmo dell'episodio,
+        # altrimenti i suoi 90 fotogrammi passano in un decimo di secondo e non
+        # si vede niente. `--slow` vale per tutti e due.
+        if args.play and hasattr(env, "envs"):
+            env.envs[0].ritmo_play = max(float(args.slow), 0.0) / 30.0
+
         # §8 — VALUTAZIONE SU PIU' SEMI. Un solo seme fissa quali porte vengono
         # provate: ripeterla su semi diversi mostra se il risultato dipende dal
         # campione o dalla politica. I semi sono indipendenti fra loro e l'unione
         # degli episodi da' l'intervallo di confidenza piu' stretto.
         semi = ([int(s) for s in args.eval_seeds.split(",") if s.strip()]
                 if args.eval_seeds else [args.seed])
-        n_ep = 1 if args.play else args.episodes
+        # §9 — `--episodes` vale per il play come per la valutazione. Il default
+        # resta uno solo a schermo e venti in valutazione, ma con `--episodes N`
+        # il play mostra N porte diverse: e' il modo di far vedere che fisica e
+        # posa cambiano a ogni episodio e la politica regge lo stesso.
+        n_ep = args.episodes if args.episodes is not None else (1 if args.play else 20)
         tutti = []
 
         for seme in semi:
@@ -365,8 +406,11 @@ def main():
                 # `eval_offset` tiene gli episodi di valutazione lontani da
                 # quelli visti in addestramento (che usa `seed + 0..n_envs-1`).
                 np.random.seed(seme + args.eval_offset + i)
+                if args.play and n_ep > 1:
+                    print(f"\n═══ episodio {i + 1} di {n_ep} ═══")
                 e = episodio(env, model, render=args.play, slow=args.slow,
-                             verboso=args.play or args.verbose, hud_ogni=args.hud_every)
+                             verboso=args.play or args.verbose, hud_ogni=args.hud_every,
+                             mostra_scena=args.play)
                 eps.append(e)
                 print(f"  ep {i}: {e['passi']:>3} step · ritorno {e['ritorno']:+9.1f} · "
                       f"errore {e['door_error']:+.4f} · leva {e['latch']:+.3f} · "

@@ -401,9 +401,12 @@ export PROGETTI_ORIGINALI="$(cd .. && pwd)"
 python3 train_unified.py --task open  --eval --eval-seeds 42,101,7 --episodes 200
 python3 train_unified.py --task close --eval --eval-seeds 42,101,7 --episodes 200
 
-# un episodio a schermo, con transizioni e bilancio dei termini
+# episodi a schermo, con transizioni e bilancio dei termini
 mjpython train_unified.py --task open  --play --slow 2
 mjpython train_unified.py --task close --play
+
+# più episodi di fila: con --episodes il play dichiara posa e fisica di ognuno
+mjpython train_unified.py --task close --play --episodes 5
 
 # verifica dell'implementazione contro questo documento
 python3 tests/test_unified.py        # 240 controlli

@@ -277,14 +277,23 @@ class UnifiedDoorEnv(gym.Env):
         in addestramento e in valutazione `render_mode` e' None e questo codice
         non viene mai eseguito.
         """
+        import time
+        ritmo = float(getattr(self, "ritmo_play", 1.0 / 30.0))
         a = np.zeros(7, dtype=np.float32)
         a[-1] = -1.0                                   # mano aperta, braccio fermo
         for _ in range(self.cfg.thr.assestamento_max_passi):
             self._rs.step(a)
             self._rs.render()
+            time.sleep(ritmo)                          # allo stesso ritmo dell'episodio
             if float(np.linalg.norm(self._rs.sim.data.qvel[:7])) <= \
                     self.cfg.thr.assestamento_vel_soglia:
                 break
+        # POSA FINALE TENUTA FERMA. Deve stare qui dentro, cioe' PRIMA che
+        # `step` ritorni: il VecEnv fa auto-reset appena riceve `done`, e da
+        # quel momento la scena e' gia' quella dell'episodio successivo.
+        for _ in range(int(self.cfg.thr.assestamento_pausa_s / max(ritmo, 1e-6))):
+            self._rs.render()
+            time.sleep(ritmo)
 
     def render(self):
         if self.render_mode == "human":
