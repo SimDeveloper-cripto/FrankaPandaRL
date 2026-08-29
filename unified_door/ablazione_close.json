@@ -1,0 +1,118 @@
+{
+ "task": "close",
+ "episodi": 50,
+ "semi": [
+  42
+ ],
+ "metodo": "un fattore per volta, stessa politica addestrata, override spenti in valutazione",
+ "esiti": {
+  "baseline": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.0693764089616908
+  },
+  "senza_riporto_leva": {
+   "n": 50,
+   "true": 50,
+   "clean": 49,
+   "true_rate": 1.0,
+   "clean_rate": 0.98,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.14968197232415684
+  },
+  "senza_fuga": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.056900833054736914
+  },
+  "senza_normale_orientata": {
+   "n": 50,
+   "true": 45,
+   "clean": 45,
+   "true_rate": 0.9,
+   "clean_rate": 0.9,
+   "ic95": [
+    0.786,
+    0.957
+   ],
+   "dist_maniglia": 0.08628617939350719
+  },
+  "consegna_alla_soglia": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.03908181377193721
+  },
+  "riporto_lento": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.061267778622065894
+  },
+  "senza_blocco_hold": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.0693764089616908
+  },
+  "senza_morsa": {
+   "n": 50,
+   "true": 48,
+   "clean": 47,
+   "true_rate": 0.96,
+   "clean_rate": 0.94,
+   "ic95": [
+    0.865,
+    0.989
+   ],
+   "dist_maniglia": 0.1022155731210433
+  },
+  "senza_override": {
+   "n": 50,
+   "true": 38,
+   "clean": 37,
+   "true_rate": 0.76,
+   "clean_rate": 0.74,
+   "ic95": [
+    0.626,
+    0.857
+   ],
+   "dist_maniglia": 0.08320254733967218
+  }
+ }
+}

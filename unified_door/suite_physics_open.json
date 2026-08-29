@@ -1,0 +1,46 @@
+{
+ "prove": [
+  {
+   "prova": "P1 molla: leva +1.0 torna a riposo",
+   "esito": true,
+   "dettaglio": "|leva| finale 0.024 \u2264 0.15"
+  },
+  {
+   "prova": "P1 molla: leva -1.0 torna a riposo",
+   "esito": true,
+   "dettaglio": "|leva| finale 0.011 \u2264 0.15"
+  },
+  {
+   "prova": "P2 leva positiva = maniglia abbassata",
+   "esito": true,
+   "dettaglio": "z: 1.150 (su) \u00b7 1.075 (riposo) \u00b7 1.000 (giu)"
+  },
+  {
+   "prova": "P2 il verso dichiarato coincide",
+   "esito": true,
+   "dettaglio": "verso_leva = +1.0"
+  },
+  {
+   "prova": "P3 a leva ferma il catenaccio trattiene la porta",
+   "esito": true,
+   "dettaglio": "da +0.000 resta a +0.0000 rad: non completa la corsa"
+  },
+  {
+   "prova": "P4 bersaglio dentro la frazione dichiarata",
+   "esito": true,
+   "dettaglio": "\u03b8* in [0.850, 0.999] \u00b7 dichiarato [0.85, 1.0]"
+  },
+  {
+   "prova": "P4 posa iniziale dentro la frazione dichiarata",
+   "esito": true,
+   "dettaglio": "\u03b8\u2080 in [0.000, 0.000] \u00b7 dichiarato [0.0, 0.0]"
+  },
+  {
+   "prova": "P4 la randomizzazione varia davvero",
+   "esito": true,
+   "dettaglio": "raggio [0.0141, 0.0272] \u00b7 attrito [0.32, 1.17] \u00b7 cricchetto [\u00d70.54, \u00d72.00]"
+  }
+ ],
+ "superate": 8,
+ "totale": 8
+}

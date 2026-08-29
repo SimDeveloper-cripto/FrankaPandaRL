@@ -1,0 +1,106 @@
+{
+ "task": "open",
+ "episodi": 50,
+ "semi": [
+  42
+ ],
+ "metodo": "un fattore per volta, stessa politica addestrata, override spenti in valutazione",
+ "esiti": {
+  "baseline": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.09421752521742825
+  },
+  "senza_riporto_leva": {
+   "n": 50,
+   "true": 2,
+   "clean": 2,
+   "true_rate": 0.04,
+   "clean_rate": 0.04,
+   "ic95": [
+    0.011,
+    0.135
+   ],
+   "dist_maniglia": 0.3250879094022053
+  },
+  "senza_fuga": {
+   "n": 50,
+   "true": 44,
+   "clean": 44,
+   "true_rate": 0.88,
+   "clean_rate": 0.88,
+   "ic95": [
+    0.762,
+    0.944
+   ],
+   "dist_maniglia": 0.10076109420873092
+  },
+  "senza_normale_orientata": {
+   "n": 50,
+   "true": 8,
+   "clean": 8,
+   "true_rate": 0.16,
+   "clean_rate": 0.16,
+   "ic95": [
+    0.083,
+    0.285
+   ],
+   "dist_maniglia": 0.13808003092736723
+  },
+  "riporto_lento": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.08109938514429847
+  },
+  "senza_blocco_hold": {
+   "n": 50,
+   "true": 49,
+   "clean": 49,
+   "true_rate": 0.98,
+   "clean_rate": 0.98,
+   "ic95": [
+    0.895,
+    0.996
+   ],
+   "dist_maniglia": 0.09289083769722978
+  },
+  "senza_morsa": {
+   "n": 50,
+   "true": 23,
+   "clean": 23,
+   "true_rate": 0.46,
+   "clean_rate": 0.46,
+   "ic95": [
+    0.33,
+    0.596
+   ],
+   "dist_maniglia": 0.03500233943313371
+  },
+  "senza_override": {
+   "n": 50,
+   "true": 0,
+   "clean": 0,
+   "true_rate": 0.0,
+   "clean_rate": 0.0,
+   "ic95": [
+    0.0,
+    0.071
+   ],
+   "dist_maniglia": 0.03861299507085593
+  }
+ }
+}

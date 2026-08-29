@@ -52,6 +52,26 @@ class TaskSpec:
     riporto_leva: bool                # C0 riporto attivo della leva
     escape: bool                      # C1 sfilamento guidato
 
+    # §8 — DOVE C0 CONSEGNA LA LEVA ALLA MOLLA. Sotto questo |leva| il riporto
+    # lascia la presa e parte la fuga: il resto della corsa lo fa la molla.
+    # Non e' cosmetico, e' cio' che decide QUANTO la pinza riesce ad
+    # allontanarsi, perche' finche' C0 e' attivo la mano accompagna l'arco della
+    # leva e resta a 2-4 cm dalla maniglia. Misurato: con la consegna a
+    # `latch_term_tol` C0 occupa l'85 % di RELEASE e alla fuga restano 4 passi.
+    #
+    # Il valore e' diverso nei due compiti perche' la porta lo e':
+    #   · CHIUSA e agganciata al catenaccio, la molla riporta la leva da sola —
+    #     misurato, senza C0 la leva finisce a 0.075, sotto la soglia di uscita.
+    #     Consegnando a 0.40 la distanza finale dalla maniglia passa da 0.035 a
+    #     0.064 m senza perdere un solo episodio su 294. Oltre si paga: a 0.60
+    #     si perdono 2 true e 3 clean su 200, a 0.80 se ne perdono 3.
+    #   · APERTA la porta e' metastabile e la molla NON riporta la leva —
+    #     misurato, senza C0 finisce a 0.137-0.436 e l'episodio va al tetto duro
+    #     mentre la porta scivola via dal bersaglio. Consegnare anche solo a
+    #     0.20 costa 3 true success su 40. Qui la consegna resta alla soglia di
+    #     uscita, cioe' C0 porta la leva fino in fondo.
+    leva_consegna: float
+
     def campiona_bersaglio(self, corsa_min: float, corsa_max: float, rng) -> float:
         """θ* in radianti. Fisso nella chiusura, campionato nell'apertura."""
         return self._campiona(self.theta_star_frac, corsa_min, corsa_max, rng)
@@ -110,7 +130,7 @@ CHIUSURA_V2_CURR1 = TaskSpec(
     theta_zero_frac=(0.70, 1.00),        # parte APERTA
     tol=0.03, t_hold_s=2.0,
     d_ret=0.25, z_ret=0.0, orienta_normale=True,
-    riporto_leva=True, escape=True,
+    riporto_leva=True, escape=True, leva_consegna=0.40,
 )
 
 APERTURA_V2_CURR1 = TaskSpec(
@@ -119,7 +139,7 @@ APERTURA_V2_CURR1 = TaskSpec(
     theta_zero_frac=(0.0, 0.0),          # parte CHIUSA
     tol=0.05, t_hold_s=1.0,
     d_ret=0.25, z_ret=0.0, orienta_normale=True,
-    riporto_leva=True, escape=True,
+    riporto_leva=True, escape=True, leva_consegna=0.15,
 )
 
 TASKS = {"close": CHIUSURA_V2_CURR1, "open": APERTURA_V2_CURR1}
@@ -190,6 +210,19 @@ class AdaptiveThresholds:
     # osservata. Non entrano in nessuna metrica.
     assestamento_max_passi: int = 90
     assestamento_vel_soglia: float = 0.05
+    # §9 — SGOMBERO DOPO L'EPISODIO, sempre e solo con `--play`. Il ritiro
+    # dentro l'episodio si ferma a 0.067 m (chiusura) e 0.094 m (apertura) e
+    # oltre non puo' andare senza perdere episodi (§10). Finito l'episodio,
+    # pero', non c'e' piu' niente da perdere: il braccio completa il gesto e
+    # libera lo spazio di lavoro. Non entra in nessuna metrica.
+    sgombero_max_passi: int = 60
+    sgombero_dist_obiettivo: float = 0.30
+    # §9 — ALZATA PRIMA DI SGOMBERARE. Il dito esce dall'arco della maniglia
+    # prima di tirarsi indietro, invece di sfilarsi radente. Pochi centimetri
+    # bastano: la maniglia sta a z = 1.075 e la mano la lascia a quell'altezza.
+    # Come il resto della coda, vive solo dentro `--play`.
+    sgombero_alzata: float = 0.04
+    sgombero_alzata_max_passi: int = 20
     # §9 — quanti secondi tenere ferma la posa finale prima di chiudere la
     # scena. Serve perche' il VecEnv fa auto-reset appena l'episodio termina:
     # senza questa pausa l'ultimo fotogramma visibile e' gia' quello
@@ -217,7 +250,17 @@ class AdaptiveThresholds:
     stall_guard_steps: int = 20
     # §8 C0 — riporto della leva, costanti del sorgente dell'apertura
     riporto_guadagno: float = 2.0        # ampiezza = 2.0·|leva|, con tetto
-    riporto_mag_max: float = 0.6
+    # §8 — IL TETTO DEL RIPORTO decide quanti passi C0 si prende, e quindi
+    # quanti ne restano alla fuga: finche' il riporto e' attivo la mano
+    # accompagna l'arco della leva e non puo' allontanarsi. Con 0.6 il tetto e'
+    # saturo per quasi tutta la corsa (2.0·|leva| supera 0.6 gia' a 0.3 rad) e
+    # la leva scende di ~0.05 rad per passo: C0 occupa l'88 % di RELEASE
+    # nell'apertura e alla fuga restano tre passi. Portandolo a 1.0 la leva
+    # torna piu' in fretta e C0 scende al 68 %, senza allungare l'episodio.
+    # Misurato su 294 episodi distinti per compito: apertura da 292/294 a
+    # 294/294 e distanza finale dalla maniglia da 0.083 a 0.094 m; chiusura
+    # invariata a 293/294 e distanza da 0.035 a 0.067 m. Nessun episodio perso.
+    riporto_mag_max: float = 1.0
     riporto_rampa: int = 4               # avvio morbido: niente strappo alla porta
     riporto_rot_gain: float = 0.5        # rotazione del polso lungo l'arco
     gabbia_margine: float = 0.015        # dita a diametro + margine: la barra ruota

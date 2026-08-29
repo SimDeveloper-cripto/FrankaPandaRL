@@ -256,7 +256,10 @@ class UnifiedFSM:
         """§8 — quale controllore è attivo. Solo l'apertura li accende."""
         t = self.cfg.task
         s = self.s
-        if t.riporto_leva and abs(latch) > self.thr.latch_term_tol:
+        # §8 — C0 lavora finche' la leva non e' sotto la soglia di CONSEGNA, che
+        # non e' la soglia di uscita: sotto quella la molla finisce da sola e la
+        # mano puo' andarsene. Vedi `leva_consegna` in config.
+        if t.riporto_leva and abs(latch) > t.leva_consegna:
             s.controllore = Controllore.C0_RIPORTO_LEVA
         elif t.escape and dist_ritiro > self.thr.retreat_settle_dist:
             s.controllore = Controllore.C1_ESCAPE

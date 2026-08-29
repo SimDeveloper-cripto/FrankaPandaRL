@@ -259,28 +259,79 @@ class UnifiedDoorEnv(gym.Env):
             self._assestamento()
         return self._osserva(obs), reward, terminated, truncated, info
 
+    def _posizione_eef(self) -> np.ndarray:
+        """Posa della pinza letta dal simulatore, senza passare dall'osservazione.
+
+        Serve alla coda del `--play`, che gira dopo che `step` ha gia' prodotto
+        l'ultima osservazione e non ne riceve altre.
+        """
+        s = self._rs.robots[0].eef_site_id
+        s = s.get("right", list(s.values())[0]) if isinstance(s, dict) else s
+        return np.asarray(self._rs.sim.data.site_xpos[s], dtype=np.float64)
+
     def _assestamento(self) -> None:
-        """§9 — LA CODA DEL `--play`, e SOLO del `--play`.
+        """§9 — LA CODA DEL `--play`, e SOLO del `--play`: sgombero e arresto.
 
-        La condizione di uscita guarda la porta e la leva, non il braccio:
-        quando scatta, la mano e' ancora in corsa. Misurato su 30 episodi per
-        compito: alla terminazione i giunti vanno a 3.57 rad/s nella chiusura e
-        2.86 rad/s nell'apertura, in 30 casi su 30, e servono in media 46 e 37
-        passi di comando nullo perche' scendano sotto 0.05. A schermo si vede
-        l'episodio tagliato con il braccio a mezz'aria.
+        Due fatti misurati sulla fine dell'episodio:
 
-        Qui si lasciano correre quei passi con azione nulla e mano aperta, solo
-        per mostrarli. NON tocca niente di misurato: ricompensa, `info`,
-        `terminated` e tutte le metriche sono gia' state calcolate sopra, e
-        l'osservazione restituita e' quella dell'ultimo passo vero. Il ramo e'
-        subordinato a `render_mode == "human"`, che vale solo con `--play`:
-        in addestramento e in valutazione `render_mode` e' None e questo codice
-        non viene mai eseguito.
+        · la condizione di uscita guarda la porta e la leva, non il braccio:
+          quando scatta, i giunti vanno ancora a 3.57 rad/s nella chiusura e
+          2.86 nell'apertura, in 30 casi su 30, e servono ~46 e ~37 passi
+          perche' si fermino;
+        · la mano e' ancora vicina alla maniglia — 0.067 m e 0.094 m — perche'
+          il ritiro DENTRO l'episodio non puo' durare di piu': allungarlo, o
+          accelerarlo, costa episodi (§10).
+
+        Qui il braccio finisce il gesto DOPO che l'episodio e' finito: si alza
+        di pochi centimetri per uscire dall'arco della maniglia, si allontana
+        lungo la normale di fuga a mano aperta, si ferma, e la posa resta ferma
+        qualche secondo. E' il gesto di un robot che libera lo spazio di lavoro
+        a compito concluso.
+
+        NON tocca niente di misurato, e non e' un modo di gonfiare i numeri:
+        ricompensa, `info`, `terminated` e tutte le metriche sono gia' state
+        calcolate sopra, e le distanze riportate nel documento sono quelle
+        DELL'EPISODIO, non quelle di questa coda. Il ramo e' subordinato a
+        `render_mode == "human"`, che vale solo con `--play`: in addestramento
+        e in valutazione `render_mode` e' None e non viene mai eseguito.
         """
         import time
         ritmo = float(getattr(self, "ritmo_play", 1.0 / 30.0))
+
+        # (1) ALZATA: il dito esce dall'arco della maniglia prima di tirarsi
+        # indietro, invece di sfilarsi radente. Pochi centimetri, poi basta.
+        z0 = float(self._posizione_eef()[2])
         a = np.zeros(7, dtype=np.float32)
-        a[-1] = -1.0                                   # mano aperta, braccio fermo
+        a[2] = 1.0                                     # solo verso l'alto
+        a[-1] = -1.0                                   # mano aperta
+        for _ in range(self.cfg.thr.sgombero_alzata_max_passi):
+            self._rs.step(a)
+            self._rs.render()
+            time.sleep(ritmo)
+            if float(self._posizione_eef()[2]) - z0 >= self.cfg.thr.sgombero_alzata:
+                break
+
+        # (2) SGOMBERO: via dalla maniglia lungo la normale di fuga.
+        n, p = self._normale_porta()
+        n = np.asarray(n, dtype=np.float64)
+        n = n / max(float(np.linalg.norm(n)), 1e-9)
+        if self.cfg.task.orienta_normale and float(np.dot(n, self._eef - p)) < 0.0:
+            n = -n
+        a = np.zeros(7, dtype=np.float32)
+        a[:3] = np.clip(n, -1.0, 1.0)
+        a[-1] = -1.0                                   # mano aperta
+        for _ in range(self.cfg.thr.sgombero_max_passi):
+            self._rs.step(a)
+            self._rs.render()
+            time.sleep(ritmo)
+            self._eef = self._posizione_eef()
+            if float(np.linalg.norm(self._eef - self._handle)) >= \
+                    self.cfg.thr.sgombero_dist_obiettivo:
+                break
+
+        # (3) ARRESTO: comando nullo finche' i giunti non si fermano.
+        a = np.zeros(7, dtype=np.float32)
+        a[-1] = -1.0
         for _ in range(self.cfg.thr.assestamento_max_passi):
             self._rs.step(a)
             self._rs.render()

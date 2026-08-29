@@ -1,0 +1,45 @@
+{
+ "task": "open",
+ "episodi": 50,
+ "semi": [
+  42
+ ],
+ "esiti": {
+  "senza_normale_orientata": {
+   "n": 50,
+   "true": 8,
+   "clean": 8,
+   "true_rate": 0.16,
+   "clean_rate": 0.16,
+   "ic95": [
+    0.083,
+    0.285
+   ],
+   "dist_maniglia": 0.13808003092736723
+  },
+  "riporto_lento": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.08109938514429847
+  },
+  "senza_blocco_hold": {
+   "n": 50,
+   "true": 49,
+   "clean": 49,
+   "true_rate": 0.98,
+   "clean_rate": 0.98,
+   "ic95": [
+    0.895,
+    0.996
+   ],
+   "dist_maniglia": 0.09289083769722978
+  }
+ }
+}

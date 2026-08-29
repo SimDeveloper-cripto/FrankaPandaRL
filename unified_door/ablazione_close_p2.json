@@ -1,0 +1,45 @@
+{
+ "task": "close",
+ "episodi": 50,
+ "semi": [
+  42
+ ],
+ "esiti": {
+  "senza_normale_orientata": {
+   "n": 50,
+   "true": 45,
+   "clean": 45,
+   "true_rate": 0.9,
+   "clean_rate": 0.9,
+   "ic95": [
+    0.786,
+    0.957
+   ],
+   "dist_maniglia": 0.08628617939350719
+  },
+  "consegna_alla_soglia": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.03908181377193721
+  },
+  "riporto_lento": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.061267778622065894
+  }
+ }
+}

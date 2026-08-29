@@ -39,13 +39,19 @@ def test_due_compiti_una_macchina():
     do = DoorState(0, 0, 0.05); do.reset(0.0, 0.384, 0.05)
     check(dc.sigma == -1.0 and do.sigma == +1.0, "§4 σ opposto nei due compiti")
     check(abs(dc.escursione - do.escursione) < 0.05, "§4 escursioni confrontabili")
-    # la differenza fra i due compiti è SOLO nei nove parametri del §6
-    nove = {"theta_star_frac", "theta_zero_frac", "tol", "t_hold_s",
-            "d_ret", "z_ret", "orienta_normale", "riporto_leva", "escape"}
+    # la differenza fra i due compiti è SOLO nei parametri dichiarati del §6
+    dichiarati = {"theta_star_frac", "theta_zero_frac", "tol", "t_hold_s",
+                  "d_ret", "z_ret", "orienta_normale", "riporto_leva", "escape",
+                  "leva_consegna"}
     diversi = {k for k in vars(cc.task) if k != "nome"
                and getattr(cc.task, k) != getattr(co.task, k)}
-    check(diversi <= nove, f"§6 differenze fuori dai nove parametri: {diversi - nove}")
-    check(len(nove) == len(vars(cc.task)) - 1, "§6 TaskSpec ha esattamente nove campi")
+    check(diversi <= dichiarati, f"§6 differenze fuori dai parametri dichiarati: {diversi - dichiarati}")
+    check(dichiarati == {k for k in vars(cc.task) if k != "nome"},
+          "§6 TaskSpec: i campi dichiarati sono tutti e soli quelli confrontati")
+    # cinque differiscono davvero: i quattro di specifica piu' la consegna
+    check(diversi == {"theta_star_frac", "theta_zero_frac", "tol", "t_hold_s",
+                      "leva_consegna"},
+          f"§6 i compiti differiscono in cinque parametri, non {sorted(diversi)}")
     # la soglia di sblocco NON è un parametro di compito: è geometria della porta
     check(cc.thr.leva_rilascio == co.thr.leva_rilascio == 1.23,
           "§7 il chiavistello blocca in entrambi i versi: soglia unica, 1.23 rad")
@@ -446,6 +452,16 @@ def test_maschera_completa():
         check(st.escape is True, f"§5 bis {t}: fuga accesa")
         check(st.orienta_normale is True, f"§5 bis {t}: normale orientata verso il robot")
         check(st.d_ret == 0.25, f"§5 bis {t}: corsa di fuga 0.25 m")
+    # §8 — la consegna della leva alla molla: presto a porta chiusa, tardi a
+    # porta aperta. E' la porta a essere diversa, non il compito.
+    check(UnifiedConfig.per("close").task.leva_consegna == 0.40,
+          "§8 chiusura: C0 consegna la leva a 0.40")
+    check(UnifiedConfig.per("open").task.leva_consegna
+          == UnifiedConfig.per("open").thr.latch_term_tol,
+          "§8 apertura: C0 porta la leva fino alla soglia di uscita")
+    check(UnifiedConfig.per("close").task.leva_consegna
+          > UnifiedConfig.per("open").task.leva_consegna,
+          "§8 la porta chiusa lascia la leva alla molla prima di quella aperta")
 
 
 def test_maschera_applicata():

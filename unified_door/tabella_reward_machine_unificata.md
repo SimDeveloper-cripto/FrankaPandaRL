@@ -384,7 +384,7 @@ fuga, e un rapporto che misura la rettilineità complessiva li conta come una
 deviazione. La grandezza che descrive il risultato voluto — quanto la mano
 finisce lontana — è quasi raddoppiata.
 
-Il margine è stretto e misurato, e ci si è fermati sul bordo. Nella chiusura,
+Il margine è stretto e misurato, e ci si è fermati sul bordo: nella chiusura,
 consegnare la leva a 0.60 costa un episodio sul seme 7, a 0.80 ne costa tre su
 200. Nell'apertura la consegna anticipata non si può fare affatto, perché lì la
 molla non riporta la leva da sola — senza riporto finisce a 0.137–0.436 invece
@@ -455,94 +455,43 @@ nettamente meglio.
 
 ---
 
-## 12. La suite di verifica
+## 12. Ablazione dei meccanismi
 
-Le stesse sei batterie delle suite dei due progetti separati, con lo stesso
-numero di episodi del preset più ampio.
+Stessa metodologia delle suite dei due progetti separati: gli override sono già
+dentro l'ambiente e accesi da parametri; l'ablazione li **spegne in valutazione,
+sulla stessa politica addestrata**, un fattore per volta [Patterson et al. 2024].
+Si ablaziona il controllo, non i pesi: in valutazione la ricompensa non entra
+nella decisione.
 
-| batteria | che cosa verifica | episodi | esito |
-|:---|:---|---:|:---|
-| **functional** | implementazione contro questo documento | — | **244 / 244** |
-| **physics** | proprietà del modello MuJoCo, senza politica | — | **8 / 8** per compito |
-| **evaluate** | true e clean success, tre semi | 200 × 3 | apertura **1.000**, chiusura **0.997** |
-| **phase** | diagnostica per fase | 100 | 100/100 su entrambi |
-| **robustness** | esito contro parametro realizzato | 300 | apertura **0.993**, chiusura **0.997** |
-| **ablation** | un override spento per volta | 50 | vedi sotto |
-
-### physics — 8 prove su 8, per compito
-
-Verifica il modello, non la politica: la molla riporta la leva a riposo da
-entrambi i lati (|leva| finale ≤ 0.026); leva positiva = **maniglia abbassata**
-(z 1.150 → 1.075 → 1.000); a leva ferma il catenaccio **trattiene la porta**;
-bersaglio e posa iniziale cadono nelle frazioni dichiarate; la randomizzazione
-varia davvero — raggio 0.0141–0.0272 m, attrito 0.32–1.17, cricchetto ×0.54–2.00.
-
-### phase — 100 episodi per compito
-
-| fase | apertura, passi · R/passo | chiusura, passi · R/passo |
-|:---|---:|---:|
-| REACH | 17.4 · −2.16 | 16.5 · −2.38 |
-| MOVE | 13.6 · **+37.29** | 11.9 · **+38.87** |
-| HOLD | 33.1 · +0.22 | 62.5 · +0.78 |
-| RELEASE | 32.0 · −1.41 | 30.8 · −0.11 |
-| FINE | 1.0 · **+599.28** | 1.0 · **+599.29** |
-
-**100/100 true success** su entrambi. La norma dell'azione in HOLD è 0.65
-(apertura) e 1.39 (chiusura) — il braccio è bloccato dall'override e il residuo è
-solo il comando che la politica emette a vuoto. Nessun episodio di chiusura
-regredisce dopo HOLD; nell'apertura 21 su 100 mostrano una deriva della porta
-oltre tolleranza dopo il rilascio, ed è la stessa metastabilità che limita la
-durata del ritiro (§10).
-
-### robustness — 300 episodi per compito
-
-Randomizzazione naturale, parametro **realizzato** registrato e binnato in
-quartili [Tobin et al. 2017; Mehta et al. 2020].
-
-| | apertura | chiusura |
-|:---|---:|---:|
-| true success | 298/300 · **[0.976, 0.998]** | 299/300 · **[0.981, 0.999]** |
-| clean success | 298/300 | 298/300 |
-
-Nessun quartile scende sotto **0.973** su nessuno dei quattro assi — raggio della
-maniglia, attrito, rigidità del cricchetto, bersaglio. Non c'è una regione del
-dominio in cui la politica ceda.
-
-### ablation — 50 episodi, un override per volta
-
-Gli override sono già dentro l'ambiente e accesi da parametri: l'ablazione li
-**spegne in valutazione, sulla stessa politica addestrata** [Patterson et al.
-2024]. Si ablaziona il controllo, non i pesi: in valutazione la ricompensa non
-entra nella decisione.
+25 episodi, seme 42. Δ è la variazione di true success rispetto alla baseline.
 
 | meccanismo spento | apertura | chiusura |
 |:---|---:|---:|
-| **riporto della leva** | **−0.960** | +0.000 |
-| **normale orientata verso il robot** | **−0.840** | −0.100 |
-| **morsa sulla presa** | **−0.540** | −0.040 |
-| controllore di fuga | −0.120 | +0.000 |
-| guardia di stallo in HOLD | −0.020 | +0.000 |
-| tetto del riporto riportato a 0.6 | +0.000 | +0.000 |
+| **riporto della leva** | **−0.920** | +0.000 |
+| **morsa sulla presa** | **−0.600** | −0.040 |
+| controllore di fuga | −0.120 | **−0.160** |
+| normale orientata verso il robot | −0.120 | **−0.160** |
+| tetto del riporto riportato a 0.6 | −0.040 | +0.000 |
 | consegna della leva alla soglia di uscita | — | +0.000 |
-| **tutti gli override insieme** | **−1.000** | **−0.240** |
+| guardia di stallo in HOLD | — | +0.000 |
+| **tutti gli override insieme** | **−1.000** | **−0.160** |
 
 Si legge in tre righe:
 
 - **l'apertura vive sugli override**: senza, non riesce **nemmeno un episodio su
-  50**. Il solo riporto della leva vale 0.96 di success rate;
-- **la chiusura è molto più robusta**: senza alcun override perde 0.24, e i
-  singoli meccanismi le costano poco o niente — la molla il lavoro lo fa da sé.
-  È la stessa asimmetria che spiega perché la consegna della leva è l'unico
-  parametro di controllo diverso fra i due compiti (§4);
-- **le soglie non sono sovradimensionate**: riportare il tetto del riporto a 0.6
-  non cambia il success rate, cambia solo *quanto la pinza si allontana* — ed è
-  esattamente per quello che è stato alzato (§10).
+  25**. Il riporto della leva da solo vale 0.92 di success rate;
+- **la chiusura è molto più robusta**: senza alcun override perde 0.16, e senza
+  il solo riporto della leva **non perde niente** — la molla il lavoro lo fa da
+  sé, ed è la stessa asimmetria che spiega perché la consegna della leva è
+  l'unico parametro di controllo diverso fra i due compiti (§4);
+- **la guardia di stallo non interviene mai** su questi episodi: è una rete di
+  sicurezza per gli stati degeneri, non un meccanismo di regime.
 
-Nella chiusura, spegnere il riporto porterebbe la mano a 0.150 m invece di
-0.069 — ma su 200 episodi costa 2 clean success, quindi è stato scartato.
+Nella chiusura, spegnere il riporto porterebbe la mano a 0.146 m invece di
+0.067 — ma su 200 episodi costa 2 clean success, quindi è stato scartato.
 
-I risultati completi sono in `unified_door/ablazione_*.json` e
-`suite_*_*.json`.
+I risultati completi sono in `unified_door/ablazione_close.json` e
+`ablazione_open.json`.
 
 ---
 
@@ -552,14 +501,9 @@ I risultati completi sono in `unified_door/ablazione_*.json` e
 cd unified_door
 export PROGETTI_ORIGINALI="$(cd .. && pwd)"
 
-# le sei batterie
-python3 tests/test_unified.py                                    # functional
-python3 suite_unificata.py physics    --task close               # physics
+# valutazione a tre semi, 200 episodi ciascuno
 python3 train_unified.py --task open  --eval --eval-seeds 42,101,7 --episodes 200
 python3 train_unified.py --task close --eval --eval-seeds 42,101,7 --episodes 200
-python3 suite_unificata.py phase      --task close --episodes 100
-python3 suite_unificata.py robustness --task close --episodes 300
-python3 ablazione.py                  --task close --episodes 50
 
 # episodi a schermo, con transizioni e bilancio dei termini
 mjpython train_unified.py --task open  --play --slow 2
@@ -567,8 +511,10 @@ mjpython train_unified.py --task close --play
 
 # più episodi di fila: con --episodes il play dichiara posa e fisica di ognuno
 mjpython train_unified.py --task close --play --episodes 5
+
+# verifica dell'implementazione contro questo documento
+python3 tests/test_unified.py        # 240 controlli
 ```
 
-Ogni comando accetta anche `--task open`. I risultati completi sono in
-`risultati_apertura.txt`, `risultati_chiusura.txt`,
-`risultati_chiusura_addestramento.txt` e nei JSON dentro `unified_door/`.
+I risultati completi sono in `risultati_apertura.txt`, `risultati_chiusura.txt`
+e `risultati_chiusura_addestramento.txt`.

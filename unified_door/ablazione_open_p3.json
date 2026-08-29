@@ -1,0 +1,33 @@
+{
+ "task": "open",
+ "episodi": 50,
+ "semi": [
+  42
+ ],
+ "esiti": {
+  "senza_morsa": {
+   "n": 50,
+   "true": 23,
+   "clean": 23,
+   "true_rate": 0.46,
+   "clean_rate": 0.46,
+   "ic95": [
+    0.33,
+    0.596
+   ],
+   "dist_maniglia": 0.03500233943313371
+  },
+  "senza_override": {
+   "n": 50,
+   "true": 0,
+   "clean": 0,
+   "true_rate": 0.0,
+   "clean_rate": 0.0,
+   "ic95": [
+    0.0,
+    0.071
+   ],
+   "dist_maniglia": 0.03861299507085593
+  }
+ }
+}

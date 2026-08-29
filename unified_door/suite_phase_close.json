@@ -1,0 +1,46 @@
+{
+ "n_episodi": 100,
+ "fasi": {
+  "REACH": {
+   "episodi": 100,
+   "passi_medi": 16.51,
+   "R_medio": -39.3669181227684,
+   "R_per_passo": -2.384428717308807
+  },
+  "MOVE": {
+   "episodi": 100,
+   "passi_medi": 11.93,
+   "R_medio": 463.6644096017629,
+   "R_per_passo": 38.86541572521064
+  },
+  "HOLD": {
+   "episodi": 99,
+   "passi_medi": 62.464646464646464,
+   "R_medio": 48.418566368572,
+   "R_per_passo": 0.7751355223946682
+  },
+  "RELEASE": {
+   "episodi": 100,
+   "passi_medi": 30.75,
+   "R_medio": -3.4666772996407236,
+   "R_per_passo": -0.11273747315904792
+  },
+  "FINE": {
+   "episodi": 100,
+   "passi_medi": 1.0,
+   "R_medio": 599.2872058105469,
+   "R_per_passo": 599.2872058105469
+  }
+ },
+ "true": 100,
+ "ic95": [
+  0.963,
+  1.0
+ ],
+ "hold_action_norm": 1.3939826874806995,
+ "wrist_release": 1.2110399340807907,
+ "ritiro_spostato": 0.12585824543609012,
+ "regressioni": 0,
+ "ritorno_medio": 1068.052400694787,
+ "passi_medi": 122.03
+}

@@ -1,0 +1,45 @@
+{
+ "task": "open",
+ "episodi": 50,
+ "semi": [
+  42
+ ],
+ "esiti": {
+  "baseline": {
+   "n": 50,
+   "true": 50,
+   "clean": 50,
+   "true_rate": 1.0,
+   "clean_rate": 1.0,
+   "ic95": [
+    0.929,
+    1.0
+   ],
+   "dist_maniglia": 0.09421752521742825
+  },
+  "senza_riporto_leva": {
+   "n": 50,
+   "true": 2,
+   "clean": 2,
+   "true_rate": 0.04,
+   "clean_rate": 0.04,
+   "ic95": [
+    0.011,
+    0.135
+   ],
+   "dist_maniglia": 0.3250879094022053
+  },
+  "senza_fuga": {
+   "n": 50,
+   "true": 44,
+   "clean": 44,
+   "true_rate": 0.88,
+   "clean_rate": 0.88,
+   "ic95": [
+    0.762,
+    0.944
+   ],
+   "dist_maniglia": 0.10076109420873092
+  }
+ }
+}
