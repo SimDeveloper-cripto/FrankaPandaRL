@@ -116,9 +116,10 @@ mjpython train_unified.py --task open  --play --slow 2
 - [OK] Generalization of the Generalized Door Closing Task (curr 0) __runs/close_gen_v2_curriculum_0_new_110626/__
 - [OK] Generalization of the Generalized Door Closing Task (curr 1) __runs/close_gen_v2_curriculum_1_new_110626/__
 - [OK] Generalization of the Generalized Door Opening Task (curr 1) __runs/open_gen_v2/__
-- [] Unified Reward Machine for both Tasks (curr 1) __unified_door/runs/__
+- [OK] Unified Reward Machine for both Tasks (curr 1) __unified_door/runs/__
 
 ### Test Results Folders (trained models)
 
 - [OK] __scratch/__
-- [] __unified_door/tests/__
+- [OK] __unified_door/tests/__
+- [OK] __figure/__

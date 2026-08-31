@@ -1,3 +1,5 @@
 .venv/
 __pycache__/
 .DS_Storearchivio/
+.DS_Store/
+scratch/.DS_Store

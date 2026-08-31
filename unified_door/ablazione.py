@@ -1,55 +1,37 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+
 """
-ablazione.py — ablazione dei meccanismi della reward machine unificata.
-
-Stessa metodologia delle suite dei due progetti separati
-(`scratch/test_*_task_v2/ablation_variants.py`): gli interventi NON riscrivono
-`step()`. I meccanismi sono gia' dentro l'ambiente e sono accesi da parametri;
-l'ablazione li SPEGNE in valutazione, sulla STESSA politica addestrata, e misura
-l'effetto sul true success. Un fattore per volta [Patterson et al. 2024].
-
-Quello che si ablaziona qui sono gli OVERRIDE e le soglie di controllo, non i
-pesi della ricompensa: in valutazione la ricompensa non entra nella decisione,
-quindi ablazionare un peso non cambierebbe nulla. Per i pesi la domanda si pone
-in addestramento, ed e' un altro esperimento.
-
 Uso:
     export PROGETTI_ORIGINALI="$(cd .. && pwd)"
     python3 ablazione.py --task close --episodes 50
     python3 ablazione.py --task open  --episodes 50 --seeds 42,101,7
 """
-import argparse
-import copy
-import json
-import math
+
 import os
 import sys
-
+import math
+import copy
+import json
+import argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config_unified import UnifiedConfig            # noqa: E402
-from fsm_unified import Fase                        # noqa: E402
-import train_unified as T                           # noqa: E402
+from config_unified import UnifiedConfig
+from fsm_unified    import Fase
 
+import train_unified as T
 
-# ─────────────────────────────────────────────────────────────────────────────
-# LE VARIANTI. Ognuna spegne UN meccanismo, tranne l'ultima che li spegne tutti.
-# `task.` tocca il compito, `thr.` le soglie condivise.
-# ─────────────────────────────────────────────────────────────────────────────
 VARIANTI = {
-    "baseline":            {},
-    "senza_riporto_leva":  {"task.riporto_leva": False},
-    "senza_fuga":          {"task.escape": False},
+    "baseline":                {},
+    "senza_riporto_leva":      {"task.riporto_leva": False},
+    "senza_fuga":              {"task.escape": False},
     "senza_normale_orientata": {"task.orienta_normale": False},
-    "consegna_alla_soglia": {"task.leva_consegna": 0.15},
-    "riporto_lento":       {"thr.riporto_mag_max": 0.6},
-    "senza_blocco_hold":   {"thr.stall_guard_steps": 10_000},
-    "senza_morsa":         {"thr.grip_lock_margin": -10.0},
-    "senza_override":      {"task.riporto_leva": False, "task.escape": False},
+    "consegna_alla_soglia":    {"task.leva_consegna": 0.15},
+    "riporto_lento":           {"thr.riporto_mag_max": 0.6},
+    "senza_blocco_hold":       {"thr.stall_guard_steps": 10_000},
+    "senza_morsa":             {"thr.grip_lock_margin": -10.0},
+    "senza_override":          {"task.riporto_leva": False, "task.escape": False},
 }
-
 
 def wilson(k: int, n: int, z: float = 1.96):
     if n == 0:
@@ -64,7 +46,7 @@ def wilson(k: int, n: int, z: float = 1.96):
 def applica(cfg, modifiche: dict) -> None:
     for chiave, valore in modifiche.items():
         dove, campo = chiave.split(".", 1)
-        oggetto = cfg.task if dove == "task" else cfg.thr
+        oggetto     = cfg.task if dove == "task" else cfg.thr
         if not hasattr(oggetto, campo):
             raise KeyError(f"parametro inesistente: {chiave}")
         setattr(oggetto, campo, valore)
@@ -76,13 +58,13 @@ def valuta(task: str, semi, n_ep: int, modifiche: dict) -> dict:
     a = A()
     a.task, a.seed, a.run_dir = task, semi[0], f"runs/unified_{task}"
     cfg = UnifiedConfig.per(task)
-    # `UnifiedConfig.per` restituisce il TaskSpec CONDIVISO a livello di modulo:
-    # senza copia, la variante precedente resterebbe attaccata a quella dopo.
+
     cfg.task = copy.deepcopy(cfg.task)
-    cfg.thr = copy.deepcopy(cfg.thr)
+    cfg.thr  = copy.deepcopy(cfg.thr)
     applica(cfg, modifiche)
+
     env, model = T.carica(cfg, a)
-    grezzo = env.venv.envs[0] if hasattr(env, "venv") else env.envs[0]
+    grezzo     = env.venv.envs[0] if hasattr(env, "venv") else env.envs[0]
     while not hasattr(grezzo, "_eef") and hasattr(grezzo, "env"):
         grezzo = grezzo.env
 
@@ -93,7 +75,7 @@ def valuta(task: str, semi, n_ep: int, modifiche: dict) -> dict:
                 continue
             visti.add(seme + i)
             np.random.seed(seme + i)
-            obs = env.reset()
+            obs  = env.reset()
             dist = 0.0
             while True:
                 act = model.predict(obs, deterministic=True)[0]
@@ -107,8 +89,8 @@ def valuta(task: str, semi, n_ep: int, modifiche: dict) -> dict:
             righe.append((bool(info["is_success"]), bool(info["successo_pulito"]), dist))
     env.close()
 
-    n = len(righe)
-    k = sum(1 for x in righe if x[0])
+    n  = len(righe)
+    k  = sum(1 for x in righe if x[0])
     kc = sum(1 for x in righe if x[1])
     lo, hi = wilson(k, n)
     return {"n": n, "true": k, "clean": kc, "true_rate": k / n, "clean_rate": kc / n,
@@ -118,12 +100,12 @@ def valuta(task: str, semi, n_ep: int, modifiche: dict) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", choices=["close", "open"], required=True)
+    ap.add_argument("--task",     choices=["close", "open"], required=True)
+
     ap.add_argument("--episodes", type=int, default=50)
-    ap.add_argument("--seeds", type=str, default="42")
-    ap.add_argument("--varianti", type=str, default=None,
-                    help="sottoinsieme separato da virgola; se assente, tutte")
-    ap.add_argument("--out", type=str, default=None)
+    ap.add_argument("--seeds",    type=str, default="42")
+    ap.add_argument("--varianti", type=str, default=None, help="sottoinsieme separato da virgola; se assente, tutte")
+    ap.add_argument("--out",      type=str, default=None)
     args = ap.parse_args()
 
     semi = [int(s) for s in args.seeds.split(",") if s.strip()]

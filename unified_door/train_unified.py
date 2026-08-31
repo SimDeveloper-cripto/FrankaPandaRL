@@ -2,8 +2,8 @@
 
 import os
 import time
-import argparse
 import math
+import argparse
 import numpy as np
 
 from config_unified import UnifiedConfig
@@ -25,7 +25,6 @@ def crea_vecenv(cfg, n_envs, seed):
 
 
 def crea_modello(cfg, env, tb=None):
-    """SAC con gli iperparametri del §6, invariati rispetto ai due progetti."""
     from stable_baselines3 import SAC
     h = cfg.sac
     return SAC(
@@ -53,29 +52,21 @@ def intestazione(cfg):
 
 
 class DiarioRewardMachine:
-    """Rende esplicita la reward machine DURANTE l'addestramento.
-
-    Ogni `ogni` passi stampa, per ciascuna fase FSM: quanti passi vi sono stati
-    spesi, il bilancio, e il totale di ogni termine. Serve a diagnosticare un
-    addestramento senza doverlo rieseguire: se una fase paga positivo e non si
-    chiude mai, si vede qui.
-    """
-
     def __init__(self, ogni=20_000):
-        self.ogni = ogni
+        self.ogni     = ogni
         self.prossima = ogni
         self.reset_finestra()
 
     def reset_finestra(self):
-        self.per_fase = {}
+        self.per_fase    = {}
         self.transizioni = {}
-        self.episodi = 0
-        self.riusciti = 0
+        self.episodi     = 0
+        self.riusciti    = 0
 
     def osserva(self, infos, rewards):
         for info, r in zip(infos, rewards):
             fase = FASI[min(int(info.get("fsm_phase", 0)), 4)]
-            b = self.per_fase.setdefault(fase, {"n": 0, "R": 0.0, "t": {}})
+            b    = self.per_fase.setdefault(fase, {"n": 0, "R": 0.0, "t": {}})
             b["n"] += 1; b["R"] += float(r)
             for k, v in (info.get("reward_terms") or {}).items():
                 b["t"][k] = b["t"].get(k, 0.0) + float(v)
@@ -120,23 +111,13 @@ def _crea_callback_diario(ogni):
 
 # ═════════════════════════════════════════════════════════════════════════
 def _crea_callback_migliore(cfg, args, env_addestramento):
-    """Salva l'ISTANTANEA MIGLIORE, non l'ultima.
-
-    I due progetti originali consegnano due file — il modello finale e quello
-    con la valutazione piu' alta — e per l'apertura il migliore e' a 650 000
-    passi su un budget di 1 500 000, cioe' il finale e' PEGGIORE. Salvare solo
-    l'ultimo butta via il picco. Qui la valutazione e' deterministica, su un
-    ambiente separato, e la statistica di VecNormalize viene salvata INSIEME al
-    modello: altrimenti in valutazione si caricherebbero pesi di un istante e
-    normalizzazioni di un altro.
-    """
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.vec_env import sync_envs_normalization
 
     class Migliore(BaseCallback):
         def __init__(self):
             super().__init__()
-            self.ogni = max(1, args.eval_ogni // cfg.sac.n_envs)
+            self.ogni     = max(1, args.eval_ogni // cfg.sac.n_envs)
             self.migliore = -np.inf
             self.env_eval = None
 
@@ -144,13 +125,14 @@ def _crea_callback_migliore(cfg, args, env_addestramento):
             if self.n_calls % self.ogni:
                 return True
             if self.env_eval is None:
-                self.env_eval = crea_vecenv(cfg, 1, args.seed + 10_000)
-                self.env_eval.training = False
+                self.env_eval             = crea_vecenv(cfg, 1, args.seed + 10_000)
+                self.env_eval.training    = False
                 self.env_eval.norm_reward = False
+
             sync_envs_normalization(env_addestramento, self.env_eval)
             eps = [episodio(self.env_eval, self.model) for _ in range(args.eval_episodi)]
-            m = metriche(eps)
-            # criterio: prima il successo, poi il ritorno a parita' di successo
+            m   = metriche(eps)
+
             punteggio = m["success_rate"] * 1e6 + m["ritorno_medio"]
             if punteggio > self.migliore:
                 self.migliore = punteggio
@@ -167,17 +149,19 @@ def _crea_callback_migliore(cfg, args, env_addestramento):
 def addestra(cfg, args):
     from stable_baselines3.common.callbacks import CheckpointCallback
     env = crea_vecenv(cfg, cfg.sac.n_envs, args.seed)
-    tb = os.path.join(args.run_dir, "tb")
-    try:                       # tensorboard è opzionale
-        import tensorboard  # noqa: F401
+    tb  = os.path.join(args.run_dir, "tb")
+    try:
+        import tensorboard
     except ImportError:
         tb = None
+
     model = crea_modello(cfg, env, tb=tb)
     os.makedirs(args.run_dir, exist_ok=True)
     cb = [CheckpointCallback(save_freq=max(1, 50_000 // cfg.sac.n_envs),
                              save_path=args.run_dir, name_prefix="ckpt"),
           _crea_callback_diario(args.diario_ogni),
           _crea_callback_migliore(cfg, args, env)]
+
     model.learn(total_timesteps=args.total_steps, callback=cb, progress_bar=False)
     model.save(os.path.join(args.run_dir, "final_model"))
     env.save(os.path.join(args.run_dir, "vecnormalize_final.pkl"))
@@ -189,29 +173,21 @@ def carica(cfg, args, render_mode=None):
     from stable_baselines3 import SAC
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
     env = DummyVecEnv([lambda: crea_env(cfg, render_mode=render_mode, seed=args.seed)])
-    vn = os.path.join(args.run_dir, "vecnormalize.pkl")
+    vn  = os.path.join(args.run_dir, "vecnormalize.pkl")
     if os.path.exists(vn):
         env = VecNormalize.load(vn, env)
         env.training, env.norm_reward = False, False
-    mp = os.path.join(args.run_dir, "best_model.zip")
+
+    mp    = os.path.join(args.run_dir, "best_model.zip")
     model = SAC.load(mp, env=env) if os.path.exists(mp) else None
     if model is None:
         print(f"[avviso] nessun modello in {mp}: la politica sarà casuale")
     return env, model
 
-
-FASI = ("REACH", "MOVE", "HOLD", "RELEASE", "FINE")
+FASI        = ("REACH", "MOVE", "HOLD", "RELEASE", "FINE")
 CONTROLLORI = ("-", "C0 riporto leva", "C1 escape")
 
-
 def scena(env) -> str:
-    """§9 — la scena estratta dopo il reset: posa della porta e fisica campionate.
-
-    Serve al `--play` su piu' episodi: senza dichiararle, uno spettatore non ha
-    modo di sapere che porta e attrito cambiano a ogni episodio, e il robot
-    sembra ripetere sempre la stessa cosa. Sono gli stessi valori che entrano
-    nell'osservazione (raggio e attrito) e nel timer di HOLD (cricchetto).
-    """
     g = env.envs[0] if hasattr(env, "envs") else None
     if g is None or not hasattr(g, "door"):
         return ""
@@ -225,9 +201,7 @@ def scena(env) -> str:
             f"{r.current_handle_friction:.2f} · cricchetto ×{r.current_latch_stiffness/base:.2f}")
 
 
-def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0,
-             mostra_scena=False):
-    """Esegue un episodio. Con `verboso` stampa transizioni e reward machine."""
+def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0, mostra_scena=False):
     obs = env.reset()
     if mostra_scena:
         s = scena(env)
@@ -251,9 +225,7 @@ def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0,
 
         if verboso:
             if fase_prec is not None and fase != fase_prec:
-                # TRANSIZIONE DI FASE: la si stampa sempre, con il bilancio
-                # della fase che si sta chiudendo e i suoi termini principali.
-                pb = per_fase[FASI[min(fase_prec, 4)]]
+                pb  = per_fase[FASI[min(fase_prec, 4)]]
                 top = sorted(pb["t"].items(), key=lambda kv: -abs(kv[1]))[:5]
                 print(f"  >>> step {passi:>3}  {FASI[fase_prec]} -> {FASI[min(fase,4)]}"
                       f"   | fase chiusa: {pb['n']} step, R {pb['R']:+.1f}"
@@ -268,10 +240,6 @@ def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0,
                       + f"\n           " + " · ".join(f"{k} {v:+.2f}" for k, v in att))
         fase_prec = fase
         if render and not done[0]:
-            # §9 — NON si disegna sull'ultimo passo. Il VecEnv ha gia' fatto
-            # auto-reset, quindi quel fotogramma mostrerebbe l'episodio
-            # SUCCESSIVO al posto della posa finale. I fotogrammi veri della
-            # fine li disegna `_assestamento`, dentro `step`, prima del reset.
             env.envs[0].render() if hasattr(env, "envs") else None
             if slow: time.sleep(slow / 30.0)
         if done[0]:
@@ -288,22 +256,16 @@ def episodio(env, model, render=False, slow=0.0, verboso=False, hud_ogni=0,
         print("  totale per termine: " + " · ".join(
             f"{k} {v:+.1f}" for k, v in sorted(accum.items(), key=lambda kv: -abs(kv[1]))))
     return dict(ritorno=tot, passi=passi,
-                is_success=bool(info.get("is_success", False)),
-                permissivo=bool(info.get("successo_permissivo", False)),
-                pulito=bool(info.get("successo_pulito", False)),
-                spostato=float(info.get("ritiro_spostato", 0.0)),
-                latch=float(info.get("latch_finale", 0.0)),
-                door_error=float(info.get("door_error", 0.0)),
-                fase=int(info.get("fsm_phase", 0)), termini=accum)
+                is_success =bool(info.get("is_success", False)),
+                permissivo =bool(info.get("successo_permissivo", False)),
+                pulito     =bool(info.get("successo_pulito", False)),
+                spostato   =float(info.get("ritiro_spostato", 0.0)),
+                latch      =float(info.get("latch_finale", 0.0)),
+                door_error =float(info.get("door_error", 0.0)),
+                fase       =int(info.get("fsm_phase", 0)), termini=accum)
 
 
 def wilson(k: int, n: int, z: float = 1.96):
-    """§8 — intervallo di confidenza di Wilson al 95 %.
-
-    E' lo stesso stimatore usato dalla suite dei due progetti separati
-    (`scratch/test_*_task_v2/stats_utils.py`), quindi i numeri sono
-    confrontabili con quelli della baseline senza conversioni.
-    """
     if n == 0:
         return 0.0, 1.0
     p = k / n
@@ -314,33 +276,27 @@ def wilson(k: int, n: int, z: float = 1.96):
 
 
 def metriche(eps):
-    """§8 — i tre livelli di successo, con l'intervallo di confidenza.
-
-    Il risultato interessante non è «l'apertura è migliorata», è «la stessa
-    macchina serve due compiti senza peggiorarne nessuno».
-    """
-    err = np.array([e["door_error"] for e in eps], dtype=float)
-    n = len(eps)
-    k_true = int(sum(e["is_success"] for e in eps))
-    k_pul = int(sum(e["pulito"] for e in eps))
+    err        = np.array([e["door_error"] for e in eps], dtype=float)
+    n          = len(eps)
+    k_true     = int(sum(e["is_success"] for e in eps))
+    k_pul      = int(sum(e["pulito"] for e in eps))
     lo_t, hi_t = wilson(k_true, n)
     lo_p, hi_p = wilson(k_pul, n)
-    return {
-        # i tre livelli della tesi (§6.3.4): permissivo / true / clean
-        "successo_permissivo": float(np.mean([e["permissivo"] for e in eps])),
-        "success_rate": float(np.mean([e["is_success"] for e in eps])),
-        "successo_pulito": float(np.mean([e["pulito"] for e in eps])),
-        "true_IC95": f"[{lo_t:.3f}, {hi_t:.3f}]",
-        "pulito_IC95": f"[{lo_p:.3f}, {hi_p:.3f}]",
-        # §7 quanto la mano si e' allontanata dalla posa di rilascio [m]
-        "ritiro_spostamento_medio": float(np.mean([e["spostato"] for e in eps])),
-        "errore_medio_con_segno": float(err.mean()),      # criterio 2: deve smettere
-        "errore_medio_assoluto": float(np.abs(err).mean()),  # di essere sistematico
-        "ritorno_medio": float(np.mean([e["ritorno"] for e in eps])),
-        "passi_medi": float(np.mean([e["passi"] for e in eps])),
-        "n_episodi": len(eps),
-    }
 
+    return {
+        "successo_permissivo": float(np.mean([e["permissivo"] for e in eps])),
+        "success_rate":        float(np.mean([e["is_success"] for e in eps])),
+        "successo_pulito":     float(np.mean([e["pulito"] for e in eps])),
+        "true_IC95":           f"[{lo_t:.3f}, {hi_t:.3f}]",
+        "pulito_IC95":         f"[{lo_p:.3f}, {hi_p:.3f}]",
+
+        "ritiro_spostamento_medio": float(np.mean([e["spostato"] for e in eps])),
+        "errore_medio_con_segno":   float(err.mean()),
+        "errore_medio_assoluto":    float(np.abs(err).mean()),
+        "ritorno_medio":            float(np.mean([e["ritorno"] for e in eps])),
+        "passi_medi":               float(np.mean([e["passi"] for e in eps])),
+        "n_episodi":                len(eps),
+    }
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
@@ -379,23 +335,11 @@ def main():
     if args.play or args.eval:
         env, model = carica(cfg, args, render_mode="human" if args.play else None)
 
-        # §9 — la coda del play va disegnata allo STESSO ritmo dell'episodio,
-        # altrimenti i suoi 90 fotogrammi passano in un decimo di secondo e non
-        # si vede niente. `--slow` vale per tutti e due.
         if args.play and hasattr(env, "envs"):
             env.envs[0].ritmo_play = max(float(args.slow), 0.0) / 30.0
 
-        # §8 — VALUTAZIONE SU PIU' SEMI. Un solo seme fissa quali porte vengono
-        # provate: ripeterla su semi diversi mostra se il risultato dipende dal
-        # campione o dalla politica. I semi sono indipendenti fra loro e l'unione
-        # degli episodi da' l'intervallo di confidenza piu' stretto.
-        semi = ([int(s) for s in args.eval_seeds.split(",") if s.strip()]
-                if args.eval_seeds else [args.seed])
-        # §9 — `--episodes` vale per il play come per la valutazione. Il default
-        # resta uno solo a schermo e venti in valutazione, ma con `--episodes N`
-        # il play mostra N porte diverse: e' il modo di far vedere che fisica e
-        # posa cambiano a ogni episodio e la politica regge lo stesso.
-        n_ep = args.episodes if args.episodes is not None else (1 if args.play else 20)
+        semi  = ([int(s) for s in args.eval_seeds.split(",") if s.strip()] if args.eval_seeds else [args.seed])
+        n_ep  = args.episodes if args.episodes is not None else (1 if args.play else 20)
         tutti = []
 
         for seme in semi:
@@ -403,8 +347,6 @@ def main():
             if len(semi) > 1:
                 print(f"\n─── seme di valutazione {seme} · {n_ep} episodi ───")
             for i in range(n_ep):
-                # `eval_offset` tiene gli episodi di valutazione lontani da
-                # quelli visti in addestramento (che usa `seed + 0..n_envs-1`).
                 np.random.seed(seme + args.eval_offset + i)
                 if args.play and n_ep > 1:
                     print(f"\n═══ episodio {i + 1} di {n_ep} ═══")
@@ -427,7 +369,6 @@ def main():
         env.close()
     else:
         addestra(cfg, args)
-
 
 if __name__ == "__main__":
     main()

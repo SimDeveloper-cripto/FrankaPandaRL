@@ -1,41 +1,21 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-suite_unificata.py — le batterie di verifica della reward machine unificata.
 
-Rispecchia le suite dei due progetti separati (`scratch/test_*_task_v2/`), che
-hanno sei batterie: functional, physics, evaluate, phase, robustness, ablation.
-Qui ci sono le tre che mancavano — `physics`, `phase`, `robustness` — perche' le
-altre tre esistono gia':
-
-    functional -> tests/test_unified.py     (244 controlli)
-    evaluate   -> train_unified.py --eval   (200 episodi × 3 semi)
-    ablation   -> ablazione.py              (un override per volta)
-
-Non tocca l'implementazione: legge, esegue e misura.
-
-Uso:
-    export PROGETTI_ORIGINALI="$(cd .. && pwd)"
-    python3 suite_unificata.py physics    --task close
-    python3 suite_unificata.py phase      --task close --episodes 100
-    python3 suite_unificata.py robustness --task close --episodes 300
-"""
-import argparse
 import json
 import math
+import argparse
+
 import os
 import sys
-
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config_unified import UnifiedConfig            # noqa: E402
-from fsm_unified import Fase                        # noqa: E402
-import env_unified as EU                            # noqa: E402
-import train_unified as T                           # noqa: E402
+from config_unified import UnifiedConfig
+from fsm_unified    import Fase
+
+import env_unified   as EU
+import train_unified as T
 
 FASI = ("REACH", "MOVE", "HOLD", "RELEASE", "FINE")
-
 
 def wilson(k, n, z=1.96):
     if n == 0:
@@ -65,26 +45,25 @@ def carica(task):
 # ═════════════════════════════════════════════════════════════════════════════
 def physics(task, _episodi):
     cfg = UnifiedConfig.per(task)
-    e = EU.UnifiedDoorEnv(cfg)
+    e   = EU.UnifiedDoorEnv(cfg)
     e.reset()
-    # NB: `reset()` ricostruisce il simulatore, quindi il riferimento va ripreso
-    # DOPO ogni reset, altrimenti si scrive su un oggetto orfano.
-    ad = e._rs.handle_qpos_addr
-    sim = e._rs.sim
+
+    ad    = e._rs.handle_qpos_addr
+    sim   = e._rs.sim
     esiti = []
 
     def prova(nome, ok, dettaglio):
         esiti.append({"prova": nome, "esito": bool(ok), "dettaglio": dettaglio})
         print(f"  [{'ok ' if ok else 'NO '}] {nome:44s} {dettaglio}")
 
-    # P1 — la molla riporta la leva a riposo, da entrambi i lati
     for segno in (+1.0, -1.0):
         e.reset()
         sim = e._rs.sim
         sim.data.qpos[ad] = segno * 1.5
-        sim.data.qvel[:] = 0.0
+        sim.data.qvel[:]  = 0.0
         sim.forward()
-        a = np.zeros(7, dtype=np.float32)
+
+        a     = np.zeros(7, dtype=np.float32)
         a[-1] = -1.0
         for _ in range(200):
             e._rs.step(a)
@@ -92,10 +71,9 @@ def physics(task, _episodi):
         prova(f"P1 molla: leva {segno:+.1f} torna a riposo",
               abs(fin) <= cfg.thr.latch_term_tol, f"|leva| finale {abs(fin):.3f} ≤ {cfg.thr.latch_term_tol}")
 
-    # P2 — il verso che ABBASSA la maniglia e' il positivo
     sim = e._rs.sim
     gid = [g for g in range(sim.model.ngeom) if sim.model.geom_id2name(g) == "Door_handle"][0]
-    z = {}
+    z   = {}
     for q in (-1.5, 0.0, +1.5):
         sim.data.qpos[ad] = q
         sim.forward()
@@ -106,7 +84,6 @@ def physics(task, _episodi):
     prova("P2 il verso dichiarato coincide", cfg.thr.verso_leva == +1.0,
           f"verso_leva = {cfg.thr.verso_leva:+.1f}")
 
-    # P3 — il catenaccio blocca la porta a leva ferma
     e.reset()
     sim = e._rs.sim
     sim.data.qpos[ad] = 0.0
@@ -114,7 +91,8 @@ def physics(task, _episodi):
     sim.data.qpos[e._rs.hinge_qpos_addr] = theta0
     sim.data.qvel[:] = 0.0
     sim.forward()
-    a = np.zeros(7, dtype=np.float32)
+
+    a     = np.zeros(7, dtype=np.float32)
     a[-1] = -1.0
     for _ in range(300):
         e._rs.step(a)
@@ -134,6 +112,7 @@ def physics(task, _episodi):
         amp = e.corsa_max - e.corsa_min
         bers.append((e.door.theta_star - e.corsa_min) / amp)
         pose.append((e.door.theta_zero - e.corsa_min) / amp)
+
     lo_b, hi_b = cfg.task.theta_star_frac
     lo_p, hi_p = cfg.task.theta_zero_frac
     prova("P4 bersaglio dentro la frazione dichiarata",
@@ -155,13 +134,14 @@ def physics(task, _episodi):
 # ═════════════════════════════════════════════════════════════════════════════
 def phase(task, n_ep):
     cfg, env, model, g = carica(task)
-    per_fase = {f: {"n": 0, "R": 0.0, "ep": 0} for f in FASI}
+    per_fase  = {f: {"n": 0, "R": 0.0, "ep": 0} for f in FASI}
     raggiunta = {f: 0 for f in FASI}
     regressi, ritorni, passi_tot, veri = 0, [], [], 0
-    hold_norm, wrist_rel, spost = [], [], []
+    hold_norm, wrist_rel, spost        = [], [], []
+
     for i in range(n_ep):
         np.random.seed(50_000 + i)
-        obs = env.reset()
+        obs   = env.reset()
         conta = {f: 0 for f in FASI}
         somma = {f: 0.0 for f in FASI}
         tot, k, vista_hold, err_dopo = 0.0, 0, False, []
@@ -225,28 +205,28 @@ def phase(task, n_ep):
 # ═════════════════════════════════════════════════════════════════════════════
 # ROBUSTNESS — esito contro parametro REALIZZATO, a randomizzazione naturale
 # ═════════════════════════════════════════════════════════════════════════════
-ASSI = {"raggio_maniglia": "raggio della maniglia (m)",
-        "attrito_maniglia": "attrito della maniglia",
+ASSI = {"raggio_maniglia":     "raggio della maniglia (m)",
+        "attrito_maniglia":    "attrito della maniglia",
         "rigidita_cricchetto": "rigidità del cricchetto (×base)",
-        "bersaglio_frazione": "bersaglio (frazione della corsa)"}
-
+        "bersaglio_frazione":  "bersaglio (frazione della corsa)" }
 
 def robustness(task, n_ep):
     cfg, env, model, g = carica(task)
     rec = []
     for i in range(n_ep):
         np.random.seed(60_000 + i)
-        obs = env.reset()
+        obs  = env.reset()
         base = g._rand.base_latch_stiffness or 1.0
-        amp = g.corsa_max - g.corsa_min
-        p = {"raggio_maniglia": g._rand.current_handle_radius,
-             "attrito_maniglia": g._rand.current_handle_friction,
+        amp  = g.corsa_max - g.corsa_min
+
+        p = {"raggio_maniglia":     g._rand.current_handle_radius,
+             "attrito_maniglia":    g._rand.current_handle_friction,
              "rigidita_cricchetto": g._rand.current_latch_stiffness / base,
              "bersaglio_frazione": (g.door.theta_star - g.corsa_min) / amp}
         while True:
-            act = model.predict(obs, deterministic=True)[0]
+            act              = model.predict(obs, deterministic=True)[0]
             obs, r, d, infos = env.step(act)
-            info = infos[0]
+            info             = infos[0]
             if d[0]:
                 break
         p["true"] = bool(info["is_success"])
@@ -254,9 +234,9 @@ def robustness(task, n_ep):
         rec.append(p)
     env.close()
 
-    n = len(rec)
-    kt = sum(r["true"] for r in rec)
-    kc = sum(r["clean"] for r in rec)
+    n      = len(rec)
+    kt     = sum(r["true"] for r in rec)
+    kc     = sum(r["clean"] for r in rec)
     lo, hi = wilson(kt, n)
     print(f"\n  true  {kt}/{n} · IC95 [{lo:.3f}, {hi:.3f}]")
     lo2, hi2 = wilson(kc, n)
@@ -287,18 +267,18 @@ def robustness(task, n_ep):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("batteria", choices=["physics", "phase", "robustness"])
-    ap.add_argument("--task", choices=["close", "open"], required=True)
+    ap.add_argument("--task",   choices=["close", "open"], required=True)
+
     ap.add_argument("--episodes", type=int, default=100)
-    ap.add_argument("--out", type=str, default=None)
+    ap.add_argument("--out",      type=str, default=None)
     args = ap.parse_args()
 
     print(f"\n{args.batteria} · {args.task} · {args.episodes} episodi\n")
-    fn = {"physics": physics, "phase": phase, "robustness": robustness}[args.batteria]
+    fn  = {"physics": physics, "phase": phase, "robustness": robustness}[args.batteria]
     ris = fn(args.task, args.episodes)
     out = args.out or f"suite_{args.batteria}_{args.task}.json"
     json.dump(ris, open(out, "w"), indent=1)
     print(f"\nsalvato in {out}")
-
 
 if __name__ == "__main__":
     main()
