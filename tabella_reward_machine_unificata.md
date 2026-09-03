@@ -17,7 +17,17 @@ dieci — i quattro della specifica più la consegna della leva (§4).
 
 ## 1. La macchina
 
-![Le cinque fasi e le transizioni](figure/macchina_fasi.png)
+![Le quattro fasi operative, le transizioni e lo stato terminale](figure/macchina_fasi.png)
+
+Le fasi operative sono **quattro**, le stesse della baseline: REACH, MOVE (era
+PUSH/PULL), HOLD (era HOLD/HOLD_OPEN) e RELEASE (era RETREAT). Nel codice l'enum ha
+un quinto valore, `FINE`, che **non è una quinta opzione**: è lo stato terminale,
+dura un passo solo, e nel one-hot a **4 bit** che la politica osserva condivide il
+bit di RELEASE — l'osservazione resta di 126 componenti, con 4 bit di fase come
+nella baseline. Esiste come stato per due motivi: è la condizione di terminazione
+(`terminated = fase == FINE`), ed è l'unico passo in cui il taglio a ±100 è sospeso
+(§2), così l'eccezione è una proprietà di uno stato e non un caso particolare dentro
+la ricompensa.
 
 `A` significa **porta al bersaglio**: `|θ − θ*| ≤ tol`. È **bilaterale** — vale
 uguale se la porta è corta o se ha superato il bersaglio — ed è la stessa
